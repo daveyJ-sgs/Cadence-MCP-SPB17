@@ -1,0 +1,63 @@
+# ---------------------------------------------------------------------------
+# Cadence SPB 17.4 — generated artifacts
+#
+# This repo holds AUTOMATION SOURCE (TCL / SKILL) and project notes.
+# Board and schematic databases live in the design directories, not here.
+# ---------------------------------------------------------------------------
+
+# Allegro PCB Editor
+*.jrl
+*.jrl.*
+allegro.jrl
+*.lck
+.lck*
+*.bak
+*.dpf
+*.art
+*.drl
+*.rou
+signoi.run
+geom.log
+pcbmill.log
+*.log
+
+# Allegro backup / autosave
+autosave*.brd
+*.brd.*
+!*.brd
+
+# OrCAD Capture
+*.DBK
+*.dbk
+*.orCache
+*.orLibCache
+*.opj.bak
+capture.log
+
+# Cadence session / temp
+*.tmp
+*.temp
+sched.log
+*.err
+
+# Editor / OS
+*.swp
+*~
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Local scratch: throwaway test designs and bridge logs. These are working
+# files tied to one machine and one session -- they carry absolute paths and
+# session names, and mean nothing to anyone else.
+scratch/
+
+# Board-specific configuration: net names, refdes, coordinates, file paths.
+# Design data stays out of this repo. See board.example.json.
+board.json

@@ -1,0 +1,84 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; allegro.ilinit -- auto-load SKILL tooling into every Allegro session.
+;;
+;; DEPLOY TO:  %HOME%\pcbenv\allegro.ilinit
+;;             (%HOME% is Cadence's own variable -- typically
+;;              <user profile>\AppData\Roaming\SPB_Data on Windows.
+;;              Check it with getShellEnvVar("HOME") at the Skill> prompt.)
+;;
+;; REQUIRES:   the environment variable CADENCE_PCB_REPO set to the root of
+;;             this repository, e.g.
+;;
+;;               setx CADENCE_PCB_REPO "C:/path/to/cadence-design-automation"
+;;
+;;             Use forward slashes. Restart Allegro after setting it.
+;;
+;; TO UNDO:    delete the deployed file. Nothing else changes.
+;;
+;; Loads by absolute path from the repo rather than copying files into
+;; pcbenv, so the repo stays the single source of truth and edits take
+;; effect on the next Allegro launch with no re-deploy step. The repo
+;; location comes from the environment so this file contains no
+;; machine-specific paths and can be deployed verbatim.
+;;
+;; This differs from the template Cadence ships at
+;;   <CDS_ROOT>\share\local\pcb\skill\example.ilinit
+;; which globs and loads every .il in the current directory -- meaning the
+;; working directory decides what executes. Fine site-wide, unwise for a
+;; tool directory that accumulates scratch files.
+;;
+;; SAFETY: every step is wrapped in errset. A failure here must never stop
+;; Allegro from starting, and it must never leave the session half-loaded
+;; without saying so. Startup is a bad place to discover a typo.
+;;
+;; Set the Allegro variable LoadSkillFilesDebug to get per-file logging.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Repo root, from the environment. Left as a global on purpose:
+;; allegroBridge.il reads it to locate its Python helper.
+pcbRepo = getShellEnvVar("CADENCE_PCB_REPO")
+
+procedure( pcbLoadTool( relPath )
+    let( (full)
+        full = strcat(pcbRepo "/" relPath)
+        if( isFile(full)
+            then
+                if( errset( load(full) )
+                    then t
+                    else printf("*** allegro.ilinit: FAILED to load %s -- continuing\n" full) nil
+                )
+            else
+                printf("*** allegro.ilinit: not found: %s\n" full)
+                nil
+        )
+    )
+)
+
+if( !pcbRepo then
+    ;; Say exactly what is wrong and how to fix it. A silent no-op here
+    ;; looks identical to "the tooling is broken".
+    printf("*** allegro.ilinit: CADENCE_PCB_REPO is not set -- no tooling loaded.\n")
+    printf("***   setx CADENCE_PCB_REPO \"C:/path/to/cadence-design-automation\"\n")
+    printf("***   then restart Allegro.\n")
+else
+
+    ;; Read-only DRC audit tooling: pcbdrcaudit / pcbdrcsummary / pcbdrctriage
+    pcbLoadTool("skill/pcbDrcAudit.il")
+
+    ;; Structured board queries: aqBoard / aqDrcs / aqSymbols / aqNets / aqPadstacks.
+    ;; The MCP server sources this itself on connect, but loading it here means a
+    ;; direct allegro_client.py session has it too, with no setup call.
+    pcbLoadTool("bridge/allegro/allegroQuery.il")
+
+    ;; External control bridge: defines abStart / abStop / abStatus
+    when( pcbLoadTool("bridge/allegro/allegroBridge.il")
+        ;; Start it automatically so no commands need typing each session.
+        ;; abStart spawns the helper via ipcBeginProcess and binds 127.0.0.1
+        ;; only. If the port is already held, it reports and continues.
+        unless( errset( abStart() )
+            printf("*** allegro.ilinit: abStart() failed -- run it by hand\n")
+        )
+    )
+
+    printf("allegro.ilinit complete\n")
+)

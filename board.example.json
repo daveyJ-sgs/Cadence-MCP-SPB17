@@ -1,0 +1,31 @@
+{
+  "_comment": [
+    "Copy this to board.json and fill it in. board.json is gitignored.",
+    "Everything here is design data -- net names, refdes, coordinates -- which",
+    "is why it is configured rather than committed. The tools refuse to run",
+    "without it rather than silently checking nothing."
+  ],
+
+  "board": "C:/path/to/your/design.brd",
+  "snapshots": "C:/path/to/your/snapshots",
+
+  "place_check": {
+    "primary_nets": ["MAINS_L", "MAINS_N"],
+    "mounting_holes": [
+      [1200.0, 1200.0, 130.0],
+      [8800.0, 3800.0, 130.0]
+    ],
+    "aggressor": "T1",
+    "sensitive": { "left": "LEFT_INPUT", "right": "RIGHT_INPUT" },
+    "channel_net_pairs": [
+      ["LEFT_INPUT", "RIGHT_INPUT"],
+      ["LEFT_OUTPUT", "RIGHT_OUTPUT"]
+    ],
+    "symmetry_pairs": [["J1", "J2"], ["J3", "J4"]]
+  },
+
+  "plane_pairs": {
+    "_comment": "per plane net: pins that must share one via offset, so the two channels come out identical by construction",
+    "GROUND_RETURN": [["C1.1", "C2.1"], ["R1.1", "R2.1"]]
+  }
+}

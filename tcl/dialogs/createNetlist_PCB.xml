@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<DialogControls>
+<PropertyPage Number="0" ></PropertyPage>	<Control Type="GROUPBOX" Enable="TRUE" Visible="TRUE" Id="34845">
+		<Value><![CDATA[PCB Footprint]]></Value>
+	</Control>
+	<Control Type="EDIT" Enable="TRUE" Visible="TRUE" Id="34379">
+		<Value><![CDATA[PCB Footprint]]></Value>
+	</Control>
+	<Control Type="AUTOCHECK_BOX" Enable="TRUE" Visible="TRUE" Id="35047">
+		<Value><![CDATA[1]]></Value>
+		<Text><![CDATA[&Create PCB Editor Netlist]]></Text>
+	</Control>
+	<Control Type="PUSH_BUTTON" Enable="TRUE" Visible="TRUE" Id="35103">
+		<Value><![CDATA[&Setup ...]]></Value>
+	</Control>
+	<Control Type="GROUPBOX" Enable="FALSE" Visible="FALSE" Id="35110">
+		<Value><![CDATA[Options]]></Value>
+	</Control>
+	<Control Type="EDIT" Enable="TRUE" Visible="TRUE" Id="35063">
+		<Value><![CDATA[allegro]]></Value>
+	</Control>
+	<Control Type="PUSH_BUTTON" Enable="TRUE" Visible="TRUE" Id="35068">
+		<Value><![CDATA[...]]></Value>
+	</Control>
+	<Control Type="AUTOCHECK_BOX" Enable="TRUE" Visible="TRUE" Id="35078">
+		<Value><![CDATA[0]]></Value>
+		<Text><![CDATA[&View Output]]></Text>
+	</Control>
+	<Control Type="AUTOCHECK_BOX" Enable="TRUE" Visible="FALSE" Id="35138">
+		<Value><![CDATA[0]]></Value>
+		<Text><![CDATA[E&xport Netgroup]]></Text>
+	</Control>
+	<Control Type="GROUPBOX" Enable="TRUE" Visible="TRUE" Id="35111">
+		<Value><![CDATA[Options]]></Value>
+	</Control>
+	<Control Type="AUTOCHECK_BOX" Enable="TRUE" Visible="FALSE" Id="35048">
+		<Value><![CDATA[0]]></Value>
+		<Text><![CDATA[Create or Upd&ate PCB Editor Board (Netrev)]]></Text>
+	</Control>
+	<Control Type="EDIT" Enable="FALSE" Visible="FALSE" Id="35049">
+		<Value><![CDATA[]]></Value>
+	</Control>
+	<Control Type="PUSH_BUTTON" Enable="FALSE" Visible="FALSE" Id="35051">
+		<Value><![CDATA[...]]></Value>
+	</Control>
+	<Control Type="EDIT" Enable="FALSE" Visible="FALSE" Id="35050">
+		<Value><![CDATA[allegrooard.brd]]></Value>
+	</Control>
+	<Control Type="PUSH_BUTTON" Enable="FALSE" Visible="FALSE" Id="35053">
+		<Value><![CDATA[...]]></Value>
+	</Control>
+	<Control Type="AUTOCHECK_BOX" Enable="FALSE" Visible="FALSE" Id="35054">
+		<Value><![CDATA[0]]></Value>
+		<Text><![CDATA[Allow Etch Re&moval During ECO]]></Text>
+	</Control>
+	<Control Type="AUTOCHECK_BOX" Enable="FALSE" Visible="FALSE" Id="35056">
+		<Value><![CDATA[0]]></Value>
+		<Text><![CDATA[Allow &User Defined Property]]></Text>
+	</Control>
+	<Control Type="AUTOCHECK_BOX" Enable="FALSE" Visible="FALSE" Id="35055">
+		<Value><![CDATA[0]]></Value>
+		<Text><![CDATA[I&gnore Fixed Property]]></Text>
+	</Control>
+	<Control Type="AUTORADIO_BUTTON" Enable="FALSE" Visible="FALSE" Id="35097">
+		<Value><![CDATA[1]]></Value>
+		<Text><![CDATA[A&lways]]></Text>
+	</Control>
+	<Control Type="AUTORADIO_BUTTON" Enable="FALSE" Visible="FALSE" Id="35099">
+		<Value><![CDATA[0]]></Value>
+		<Text><![CDATA[I&f Same]]></Text>
+	</Control>
+	<Control Type="AUTORADIO_BUTTON" Enable="FALSE" Visible="FALSE" Id="35100">
+		<Value><![CDATA[0]]></Value>
+		<Text><![CDATA[Neve&r]]></Text>
+	</Control>
+	<Control Type="GROUPBOX" Enable="FALSE" Visible="FALSE" Id="35117">
+		<Value><![CDATA[Board Launching Option]]></Value>
+	</Control>
+	<Control Type="AUTORADIO_BUTTON" Enable="FALSE" Visible="FALSE" Id="35114">
+		<Value><![CDATA[1]]></Value>
+		<Text><![CDATA[Ope&n Board in Allegro PCB Editor]]></Text>
+	</Control>
+	<Control Type="AUTORADIO_BUTTON" Enable="FALSE" Visible="FALSE" Id="35118">
+		<Value><![CDATA[0]]></Value>
+		<Text><![CDATA[Open Board in A&PD]]></Text>
+	</Control>
+	<Control Type="AUTORADIO_BUTTON" Enable="FALSE" Visible="FALSE" Id="35137">
+		<Value><![CDATA[0]]></Value>
+		<Text><![CDATA[Open Board in Ca&dence SiP]]></Text>
+	</Control>
+	<Control Type="AUTORADIO_BUTTON" Enable="FALSE" Visible="FALSE" Id="35115">
+		<Value><![CDATA[0]]></Value>
+		<Text><![CDATA[Open Board in OrCAD PCB Edi&tor]]></Text>
+	</Control>
+	<Control Type="AUTORADIO_BUTTON" Enable="FALSE" Visible="FALSE" Id="35116">
+		<Value><![CDATA[0]]></Value>
+		<Text><![CDATA[Do not op&en board file]]></Text>
+	</Control>
+	<Control Type="GROUPBOX" Enable="FALSE" Visible="FALSE" Id="35143">
+		<Value><![CDATA[Constraints Options]]></Value>
+	</Control>
+	<Control Type="AUTORADIO_BUTTON" Enable="FALSE" Visible="FALSE" Id="35141">
+		<Value><![CDATA[0]]></Value>
+		<Text><![CDATA[Overwrite]]></Text>
+	</Control>
+	<Control Type="AUTORADIO_BUTTON" Enable="FALSE" Visible="FALSE" Id="35142">
+		<Value><![CDATA[1]]></Value>
+		<Text><![CDATA[Changes  Only]]></Text>
+	</Control>
+	<Control Type="AUTOCHECK_BOX" Enable="FALSE" Visible="FALSE" Id="35144">
+		<Value><![CDATA[1]]></Value>
+		<Text><![CDATA[Show Constraints Difference Report]]></Text>
+	</Control>
+</DialogControls>
