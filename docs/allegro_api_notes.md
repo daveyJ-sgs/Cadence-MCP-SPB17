@@ -288,7 +288,155 @@ that merely shares that vertex. A whole layer-3 supply trunk was lost that way.
 
 ---
 
-## 11. Rules that generalise
+## 11. Text, and the silkscreen nobody checks
+
+```skill
+axlDBGetAttachedText( o_object )                  ; symbol OR design
+axlDBCreateText( t_text l_anchor r_orientation [t_layer] [o_attach] )
+```
+
+⛔ **`axlDBGetAttachedText` takes the DESIGN as well as a symbol.** Board-level
+text — a title, a revision, a legend — is created with `o_attach` = nil and
+hangs off the design. It appears in **no** `design->symbols` walk. A checker
+built only on `->symbols` reports a clean board while ignoring every piece of
+text a human actually authored.
+
+**`axlDBCreateText` accepts embedded newlines**, and each one becomes a
+*separate database object* with its own dbid; line spacing comes from the text
+block. The lines run **downward** from the anchor, so anchoring near the bottom
+edge puts line 2 off the board.
+
+`axlDBTextBlockFindName` returns `nil` for the numeric block names that text
+objects actually report (`tt->textBlock` → `"3"`). Read a working object's
+block and reuse it rather than trying to look one up.
+
+### A footprint carries far more text than belongs on silkscreen
+
+Up to five classes — `REF DES`, `DEVICE TYPE`, `COMPONENT VALUE`,
+`USER PART NUMBER`, `TOLERANCE` — each instantiable on SILKSCREEN, ASSEMBLY
+**and** DISPLAY. Only `REF DES` belongs on silkscreen; the rest are drawing
+data and belong on ASSEMBLY, which is not printed.
+
+Measured on a 53-part board: ten parts carried four junk strings each, all
+stacked at the same y on top of each other and the pads, the widest **2435 mil
+— wider than the board**. Silkscreen is not copper, so this violates no
+spacing rule and DRC reads 0 all the way to the fab.
+
+> Keep `PACKAGE GEOMETRY` text when cleaning. The pin-1 marker lives there,
+> usually as a bare `*`. Filtering by class rather than by content keeps a
+> marker drawn as something else.
+
+### `pin->bBox` is the true pad extent
+
+Unlike `symbol->bBox`, which includes the refdes text and is useless as a body
+extent (§9), a **pin's** `bBox` is the pad. Verified against a DD-10 DFN:
+65 × 94 mil, matching the datasheet's 1.65 × 2.38 mm exposed pad.
+
+### What a text checker still will not catch
+
+Component body outlines are `path` children on
+`PACKAGE GEOMETRY/SILKSCREEN_TOP` — not text and not pads. A check built on
+text-vs-pad passes a board title that visibly clips a component outline. On
+this board the clip was **4 mil**, caught by a human looking at the screen
+after the tool said clean. `symbol->children` reaches the outlines; their
+`bBox` overstates an L-shaped path, so treat the result as advisory.
+
+Add to the §10 table:
+
+| defect | DRC | unconnected | what does catch it |
+|---|---|---|---|
+| 2435-mil part-number string on silkscreen | 0 | 0 | text inventory by subclass |
+| refdes text printed across a pad | 0 | 0 | text bBox vs `pin->bBox` |
+| board title clipping a component outline | 0 | 0 | text bBox vs silk `path` children |
+
+### Changing text: the attribute is a silent no-op
+
+```skill
+tt->textBlock = "3"                  ; returns, changes NOTHING
+axlDBChangeText( o_dbid t_text [r_textOrientation | x_textBlock] )
+```
+
+Assigning `textBlock` on a text dbid fails silently — no error, and a read-back
+still shows the old block. Use `axlDBChangeText(tt nil 3)`: `nil` for the text
+keeps the string, and a bare integer changes only the block. Note the block
+argument is an **integer**, while `tt->textBlock` reads back as a **string**.
+
+Changing the block changes the text's extent, so any overlap result computed
+before the change is void. Re-run the check afterwards.
+
+### Rotating text in place
+
+`axlTransformObject(tt ?angle 180.0 ?origin <centre of tt->bBox>)` flips text
+with **zero** movement — verified by a bBox that was byte-identical before and
+after. Rotating about the default origin swings it off its anchor instead.
+This is the same pivot lesson as §7: choose the pivot, don't accept the
+default.
+
+Silk text should read from at most two orientations, 0° and 90°. A board
+rotation applied to a part cluster takes its labels 0° → 270° as a side
+effect, so a rotation audit is worth running after any group rotate.
+
+### Pin-1 markers are not always text
+
+A library can indicate pin 1 either way, and one library can do **both**:
+
+```
+U1..U4   text "*" on PACKAGE GEOMETRY/SILKSCREEN_TOP
+U5, U6   a ~10 x 12 mil `path` dot beside pin 1, no text at all
+```
+
+Counting the text class alone reported the two DFNs as unmarked. They were
+marked; the marker was geometry. Adding a redundant `*` then collided with a
+neighbouring part's polarity mark — a defect introduced by trusting a
+text-only count. **Check `symbol->children` for paths before concluding a part
+has no marker.**
+
+### The menu tree IS readable — from the menu file, not the API
+
+§12.2 says the GUI menu tree is not inferable from the API. It is not
+inferable, but it is not unknowable either: it is a plain text file.
+
+```
+<CDS_ROOT>/share/pcb/text/cuimenus/orcad.men      OrCAD PCB Designer
+<CDS_ROOT>/share/pcb/text/cuimenus/allegro.men    Allegro
+```
+
+**The products do not share a menu tree.** `allegro.men` puts the Windows
+submenu under `View`; `orcad.men` puts it under `Display`. Quoting the wrong
+file at an OrCAD user is how one of the wrong guesses in this project
+happened. Read the file the product actually loads.
+
+```
+Display -> Windows -> Find          "showhide find"
+Display -> Windows -> Visibility    "showhide vis"
+Edit    -> Move                     "move"
+```
+
+⛔ **The menu file does not describe panel behaviour.** The Find panel's
+filter options stay **greyed out unless the tool is in General Edit mode** —
+nothing in `orcad.men` says so, and no API call reports it. Reported by the
+engineer after the documented path failed to work.
+
+And a caution against sending a human to the GUI at all: with the Find filter
+restricted to Text, `Edit -> Move` on a refdes still moved the **parent
+symbol**. Whatever the correct interactive incantation is, moving attached
+text from the bridge is deterministic and cannot touch the part:
+
+```skill
+axlTransformObject( <text dbid> ?move list(dx dy) )
+```
+
+Read the bBox back afterwards and it is exact. Prefer it.
+
+### Minor, but it costs a round trip
+
+`t` is a protected symbol and cannot be a loop variable —
+`foreach(t list ...)` fails with *"Variable is protected and cannot be
+assigned to"*.
+
+---
+
+## 12. Rules that generalise
 
 1. **Look commands up; never guess.** `docs/allegro_skill_index.md` lists 861
    `axl*` functions. Journaling (`SetOptionBool Journaling TRUE` +

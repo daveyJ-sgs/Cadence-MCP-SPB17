@@ -33,6 +33,7 @@ SKILL evaluation.
 | `bridge/allegro/place_check.py` | Placement checker — keepin, overlap, creepage, symmetry |
 | `bridge/allegro/dangle_check.py` | Finds copper that terminates on nothing |
 | `bridge/allegro/route_to_plane.py` | Drops isolated SMD pins onto a plane net |
+| `bridge/allegro/silk_check.py` | Silkscreen audit — clutter, text on pads, unlabeled parts |
 | `bridge/allegro/layer_view.py` | Show one conductor layer at a time |
 | `bridge/allegro/text_view.py` | Hide the component-text blizzard |
 | `bridge/allegro/snapshot.py` | Dated board copy, keyed to the git commit |
