@@ -105,6 +105,25 @@ axlDRCUpdate(t)        ; takes an argument; axlDRCUpdate() errors
 A DRC count read after a cset edit is stale in *either* direction — it can show
 phantom violations against legal copper, or hide real ones.
 
+### ⛔ `design->drcs` is a cached LIST, and it goes stale too
+
+Converting shapes to dynamic in the GUI left `length(design->drcs)` reporting
+**75** on a board that was clean. The list is not refreshed by work done
+outside the bridge:
+
+```skill
+length(axlDBGetDesign()->drcs)                       ; 75  <- stale
+axlDRCUpdate(t)                                      ;  4  <- authoritative
+axlDRCGetCount()                                     ;  4
+axlDBTransactionCommit(axlDBTransactionStart())      ; flush
+length(axlDBGetDesign()->drcs)                       ;  4  <- now agrees
+```
+
+**Use `axlDRCGetCount()` for the number**, and flush the transaction before
+walking `->drcs` for detail. Counting the length of that list is the obvious
+thing to do and it is wrong often enough to matter — every DRC figure in this
+repo's earlier notes came from it.
+
 ---
 
 ## 5. Object model
@@ -134,6 +153,75 @@ Worse: **branches renumber on every delete.** Looping `for bi in range(n)` while
 deleting inside the loop silently skips one. Re-scan from branch 0 after each
 delete and repeat until a clean pass, with an iteration cap.
 
+### Finding things: three signatures that look right and return nil
+
+```skill
+setof(x axlDBGetDesign()->nets x->name == "VCC")    ; nil -- == is not string compare
+setof(x axlDBGetDesign()->nets equal(x->name "VCC"))  ; works
+```
+
+- **`==` does not compare strings.** It returns nil silently, so a lookup that
+  finds nothing looks like "no such object" rather than "wrong operator".
+- **A net has no `->pins`.** Its attributes are `(parentGroups branches name
+  nBranches objType readOnly prop pinpair ratT ratsnest ... )`. Walk
+  `net->branches` then `branch->children` and filter on `objType`.
+- **`design->components` exists but carries no `refdes`** — `design->symbols`
+  does. A component is reachable as `sym->component`.
+- Print an object's attribute names with `obj->?` when a guess fails. It is one
+  call and it ends the guessing; `obj->??` returns name/value pairs as a flat
+  list, so `mapcar(car ...)` over it errors.
+
+### ⛔ Properties: where they live, and two silent failures
+
+Component properties live on the **component definition**, not the symbol and
+not the component:
+
+```skill
+sym->component->compdef->prop     ; (VALUE PART_NUMBER PART_NAME)
+```
+
+That means **one write per unique part, not per refdes** — and a compdef is
+*shared* by every refdes using it, so writing per-refdes will give them all
+whichever value went last. Detect that collision before writing.
+
+**Trap 1 — a dbid does not survive a round trip.** Read back over a bridge it
+prints as `dbid:000001685B681118`. Sending that text back to SKILL is a parse
+error, not a reference to the object. Look the object up again into a SKILL
+variable. Code that captured dbids client-side and interpolated them reported
+success on every write and changed nothing.
+
+**Trap 2 — `axlDBAddProp` reads back stale.** The write succeeds and the old
+value is still there until the transaction is flushed:
+
+```skill
+axlDBAddProp(list(cd) list(list("PART_NUMBER" "NEWVALUE")))
+  ; => ((dbid:...) nil)          <- this is what success looks like
+cd->prop->PART_NUMBER            ; still the OLD value
+axlDBTransactionCommit(axlDBTransactionStart())
+cd->prop->PART_NUMBER            ; NEWVALUE
+```
+
+Two things about that return: **"not nil" is not a success test** — an error
+string is also not nil, which is exactly how a broken write passed its own
+check. Test that the return is a list headed by a dbid. And note
+`compdef->readOnly` is `t` while the write works anyway; that flag is not a
+permission check on anything.
+
+### Attributes that only a netlist import can change
+
+`compdef->deviceType` is a composite string built at import time from
+footprint, class, value and part number:
+
+```
+C_SMC0805_DISCRETE_100N_<partnumber>
+```
+
+It is a read-only attribute with no corresponding property, so editing
+`PART_NUMBER` leaves it stating the superseded part. It appears in IPC-2581 as
+a `DEVICE_TYPE` textual characteristic. **The BOM section is authoritative;
+`DEVICE_TYPE` is a label.** Expect it to drift, and say so in a fab README
+rather than running an ECO through a finished board to correct cosmetics.
+
 ---
 
 ## 6. Dynamic shapes
@@ -144,12 +232,24 @@ delete and repeat until a clean pass, with an iteration cap.
 - A **foreign-net** via punches an isolating void. A via on the shape's **own**
   net gets a thermal tie and costs the plane nothing. Measure the void count
   either side of a change; it is the cheapest confirmation available.
-- ⛔ **`axlShapeChangeDynamicType` is actively harmful.** It does not convert
-  the shape, and a shape passed to it can no longer be deleted from the bridge
-  — `axlDeleteObject` returns `nil` forever, and it survives save and reload.
-  Convert in the GUI: `Shape → Change Shape Type`, with
+- ⛔ **`axlShapeChangeDynamicType` does not convert the shape.** Convert in the
+  GUI: `Shape → Change Shape Type`, with
   `Options → Shape Fill → Type = "To dynamic copper"`. The Active Class must be
   the etch subclass or that dropdown stays greyed out.
+- ⛔ **A DYNAMIC SHAPE CANNOT BE DELETED FROM THE BRIDGE — however it was made
+  dynamic.** This was first recorded as damage done by
+  `axlShapeChangeDynamicType`; that was too narrow. A shape converted through
+  the GUI resists deletion identically, and so does the documented `'ripup`
+  mode:
+
+  ```skill
+  axlDeleteObject(axlDBGetShapes("ETCH/PWR"))            ; nil, shapes remain
+  axlDeleteObject(axlDBGetShapes("ETCH/PWR") 'ripup)     ; nil, shapes remain
+  ```
+
+  It survives save and reload. **Deleting a pour is a GUI action** — plan any
+  re-pour around one manual step, and get the geometry right before asking for
+  the conversion rather than after.
 - ⛔ **`axlDBCreateShape` does not close the polygon** despite the doc saying it
   does. Repeat the first vertex explicitly; an unclosed path returns bare `nil`
   with the reason printed only to the command window.
@@ -279,6 +379,41 @@ Notes on each:
   routing on a net that has nothing to do with it.
 - **`nBranches` should equal 1 on a fully routed net.** `unconnected 0` with
   `nBranches 2` means a piece of copper with no pin on it.
+
+### ⛔ Verifying fab output: count features per layer, not layers
+
+An IPC-2581 export was declared good three separate times — components, BOM
+items, nets and layer stackup all correct — and had **one geometry Set per
+copper layer**. The board's entire artwork was missing. The tell was in every
+one of those checks and never read: `TOP: 1 Set`.
+
+```
+                       broken export        real export
+TOP                        1 Set              359 Sets
+GND                        1                  147
+BOTTOM                     1                  155
+soldermask              absent                155 / 37
+```
+
+**Name the per-item quantity that would be non-zero if the artifact were real,
+and measure that.** Features per layer, not layers. A count that is suspiciously
+uniform across items — 1, 1, 1, 1 — is broken, not tidy. Cross-check the two
+formats against each other: IPC `Polygon` count and Gerber `G36` region count
+per layer should tell the same story, and a poured layer with zero of either
+has no copper on it.
+
+### ⛔ Both fab formats compress, and a naive grep reports false problems
+
+- **Excellon repeat codes.** `R03X00800` means "three more holes, stepping X by
+  0.008 in". A file with 95 coordinate lines can hold 106 holes. Counting
+  coordinate lines undercounts — and the drill log states the true total, so
+  reconcile against it.
+- **Gerber omits repeated coordinates.** `Y380000D03*` inherits X from the line
+  above. Grepping for a full `X…Y…` pair finds some flashes and silently misses
+  others, which reads as missing geometry.
+
+Both of these produced a confident "this is broken" report about output that
+was correct. **Read the format before believing a grep.**
 
 ### Deleting
 
@@ -454,3 +589,14 @@ assigned to"*.
    deletes.
 6. **Snapshot the board at milestones.** Allegro keeps no rolling `.brd`
    backup, and a binary that changes on every save does not belong in git.
+7. **When a rule is discovered through one route, test whether it is wider
+   than that route.** "`axlShapeChangeDynamicType` makes a shape undeletable"
+   sat here for days. The real rule is that *any* dynamic shape is undeletable
+   from the bridge — the function was incidental, and blaming it meant the
+   workaround (convert in the GUI) looked safe when it was not.
+8. **A cached list is not a live query.** `design->drcs` and any other
+   collection read off the design can lag work done in the GUI. Prefer a
+   function that computes (`axlDRCGetCount()`), or flush a transaction first.
+9. **A smaller artifact is not automatically a worse one.** Diff the file list
+   before believing a size change. A fab package that shrank 7x had gained
+   copper and lost only two copies of the design database.
