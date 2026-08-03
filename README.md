@@ -5,7 +5,8 @@
 Design automation for **OrCAD Capture 17.4** and **Allegro PCB Editor 17.4**,
 including a working **external control bridge** — an outside process drives
 Capture through its first-party text API and reads back real database state.
-No screenshots, no GUI scripting.
+No screenshots, no GUI scripting. Developed and tested while designing a op-amp
+based phono preamplifier.
 
 ```
                           ┌──TCP 9020──▶ OrCAD Capture     (schematic DB)
