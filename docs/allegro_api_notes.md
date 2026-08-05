@@ -404,10 +404,19 @@ has no copper on it.
 
 ### ⛔ Both fab formats compress, and a naive grep reports false problems
 
-- **Excellon repeat codes.** `R03X00800` means "three more holes, stepping X by
-  0.008 in". A file with 95 coordinate lines can hold 106 holes. Counting
-  coordinate lines undercounts — and the drill log states the true total, so
-  reconcile against it.
+- **Excellon repeat codes.** `R03X00800` means "three more holes, stepping X".
+  A file with 95 coordinate lines can hold 106 holes. Counting coordinate lines
+  undercounts — and the drill log states the true total, so reconcile against
+  it.
+
+  ⛔ **The step distance depends on the FORMAT declared in the header, and this
+  note originally got it wrong by 100x.** With `FORMAT 2.3` (2 integer, 3
+  decimal, inches) `X00800` is **0.800 in**, not 0.008 in. The wrong reading
+  survived review because 0.008 in "looked like a plausible small number" —
+  and it is not plausible at all: an 8 mil step with a 10 mil drill would be
+  overlapping holes. **Sanity-check a decoded coordinate against physical
+  reality before trusting your decode**, and read `FORMAT` from the log rather
+  than assuming the common 2.4.
 - **Gerber omits repeated coordinates.** `Y380000D03*` inherits X from the line
   above. Grepping for a full `X…Y…` pair finds some flashes and silently misses
   others, which reads as missing geometry.
