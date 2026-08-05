@@ -580,7 +580,148 @@ assigned to"*.
 
 ---
 
-## 12. Rules that generalise
+---
+
+## 12. Padstacks — and the one change the API will not make
+
+A vendor rejected a fab package for having no board outline. Auditing the rest
+of it found something worse: **14 connector pads with copper, a drilled hole,
+and `NULL` soldermask on both sides.** The board's entire audio I/O and its
+mains input would have arrived sealed under mask. The defect was in four
+padstacks that came from a vendor footprint model.
+
+### Where the defect lives, and how to see it
+
+```skill
+sym->component->compdef        ; padstacks are shared by every pin that uses them
+padstack->pads                 ; one entry per layer per pad TYPE
+pad->layer                     ; "ETCH/TOP", "PIN/SOLDERMASK_TOP", ...
+pad->figureName                ; NULL means nothing is plotted on that layer
+```
+
+⛔ **Counting mask layers is not checking them.** Every padstack on that board
+reported `mask=2 paste=2` — the layer entries all existed. Four of them had
+`figureName` = `NULL`, which produces no opening at all. **Read the figure, not
+the layer count.**
+
+`TVIA10A`-style tented vias legitimately have NULL mask, so this cannot be a
+blanket rule — compare against the padstack's own copper: **copper present with
+mask NULL is the defect.**
+
+### ⛔ `axlPadstackEdit` cannot fix it
+
+> "Currently only global padstack settings are supported. We currently do not
+> allow editing pad layer characteristics."
+
+Which is precisely the thing that has to change. It edits usage, drill, hole
+type — not what is on a layer.
+
+### ⛔ `axlReplacePadstack` is the wrong tool too
+
+Its first argument is a list of **pin/via dbids**, not a padstack name — pass a
+name and it returns `nil` with no error, because "nothing in the list was a pin
+or a via". Worse, the doc warns:
+
+> "Will not change symbol definition pins."
+> "Changing the padstack on a pin ... will result in an exploded pin."
+
+So for pins that come from a footprint it is both ineffective and messy.
+
+### ✅ The route that works: create, dump, refresh
+
+The doc's own performance hint points at it — *"if you want to change all
+instances of a particular padstack it will be faster to change the padstack
+itself"*:
+
+```skill
+; 1. build a corrected padstack. Mask layers ARE supported here.
+padList = list(
+    make_axlPadStackPad(?layer "TOP"            ?type 'REGULAR ?figure 'CIRCLE ?figureSize 166.54:166.54)
+    make_axlPadStackPad(?layer "SOLDERMASK_TOP" ?type 'REGULAR ?figure 'CIRCLE ?figureSize 166.54:166.54))
+drl = make_axlPadStackDrill(?usage "Through" ?holeType 'CIRCLE_DRILL
+                            ?plating 'PLATED ?drillDiameter 111.02)
+axlDBCreatePadStack("MYPAD_SM" drl padList t)      ; => dbid
+
+; 2. write it over the library original
+axlPadstackToDisk("MYPAD_SM" "MYPAD")             ; => t
+
+; 3. GUI: Tools -> Padstack -> Refresh...   (takes a .lst of names)
+```
+
+Notes that cost time:
+
+* ⛔ **A created padstack does not appear in `design->padstacks` until the
+  transaction is flushed.** `axlDBCreatePadStack` returns a dbid, the object
+  exists, and a lookup by name finds nothing — 25 before the flush, 26 after.
+  Same shape as `axlDBAddProp`. Flush, then verify.
+* **`axlDBCreatePadStack` returns `nil` on a duplicate name**, so a re-run
+  after a partial pass looks like a failure. Make the script idempotent.
+* **`axlPadstackToDisk` writes to the current working directory.** `padpath`
+  starts with `.`, so the new file shadows the library original — convenient,
+  but check where it landed.
+* ⛔ **`axlRefreshSymbol` does NOT refresh padstacks.** It returns a dbid,
+  looks like it worked, and the pad layers are unchanged. Its own doc says the
+  padstack options are "done at the padstack level not the symbol level".
+* **`axlLoadPadstack` will not reload from disk either** — it returns the
+  existing database copy and only falls back to the library if the name is
+  absent.
+* **Refresh only what you intend.** "Refresh all" re-reads every padstack from
+  the library, and any padstack built in-session has no file to read. Use a
+  `.lst` of names — plain text, one per line.
+* **`axlPurgePadstacks('padstacks nil)`** removes the unused originals
+  afterwards. It needs both arguments; called bare it errors.
+
+### Paste on a through-hole pad, and 1 mil apertures
+
+The same audit found paste apertures equal to the copper pad on eight
+through-hole padstacks — the stencil printed paste into 30 drilled holes,
+including a mains screw terminal and a laminated transformer, neither of which
+can go through reflow. **Correct paste for a through-hole pin is none**; omit
+the PASTEMASK layers when building the replacement.
+
+And both leadless thermal pads carried a **1.0 x 1.0 mil** paste aperture
+against a 65 x 94 mil pad — 0.02% of the area. A padstack holds one figure per
+layer, so a true window-pane needs a shape or flash symbol; a single aperture
+at ~50% of pad area is the practical fix and is inside normal guidance.
+
+---
+
+## 13. Two more traps found the same day
+
+### ⛔ `t` is a reserved SKILL variable name
+
+```skill
+setof(t design->text ...)                 ; *Error* t is reserved
+mapcar(lambda((t) t->text) ...)           ; same
+```
+
+The error is clear when you read it, but it arrives inside a long expression
+and reads as "the query is wrong" rather than "the loop variable is illegal".
+Use any other name.
+
+### ⛔ Batch NC output silently falls back to defaults
+
+`nctape` reads `nc_param.txt` found via `NCDPATH`, which is `. ..` — relative
+to **where the tool runs**, not to the design. A build script that copies the
+board somewhere else and runs there gets defaults, and says so only in the log:
+
+```
+WARNING(SPMHMF-325): No NC Parameters file found ... using defaults
+```
+
+The defaults produced a drill file with **no `M48` header, no units, and no
+tool codes** — 106 bare coordinates that a standard parser reads as a single
+tool. It shipped to a vendor. Copy `nc_param.txt` alongside the board, and
+fail loudly if it is missing rather than letting the warning scroll past.
+
+The file is plain text and Allegro writes it from **Export → NC Parameters**.
+`ENHANCED_EXCELLON YES` gets the `M48`/`INCH`/`%`/`M30` wrapper; **`TOOL-SELECT
+YES` is what emits the `T` codes** and is not exposed in that dialog — edit the
+file.
+
+---
+
+## 14. Rules that generalise
 
 1. **Look commands up; never guess.** `docs/allegro_skill_index.md` lists 861
    `axl*` functions. Journaling (`SetOptionBool Journaling TRUE` +
