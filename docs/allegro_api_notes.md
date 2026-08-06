@@ -32,6 +32,23 @@ A related, worse state: if a bridge client is killed mid-exchange, the SKILL
 relay can wedge. `--ping` still answers (the helper replies locally) while
 every real evaluation hangs. Restarting Allegro is the reliable fix.
 
+### Do not use `axlDBGetDesign()->name` to test whether a board is open
+
+It reads `nil` **whether or not a design is loaded**, so a nil tells you
+nothing. Reading it as "no board is open" produced a wrong conclusion and
+deferred a verification step for a day.
+
+```skill
+axlDBGetDesign()->name              ; nil even with a board open — useless
+length(axlDBGetDesign()->symbols)   ; nil = closed, a count = open
+```
+
+⭐ **Probe for something that must be present, and read a count.** A result
+that is falsy for two different reasons cannot distinguish them — the same
+shape as §5's `"not nil" is not a success test`. `ping` answering is a
+statement about the helper, not about Allegro; `->name` is a statement about
+nothing at all.
+
 ---
 
 ## 2. Allegro demands EXACT coordinates and says nothing when it does not get them
