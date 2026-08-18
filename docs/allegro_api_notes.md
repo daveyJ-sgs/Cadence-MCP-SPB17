@@ -32,6 +32,29 @@ A related, worse state: if a bridge client is killed mid-exchange, the SKILL
 relay can wedge. `--ping` still answers (the helper replies locally) while
 every real evaluation hangs. Restarting Allegro is the reliable fix.
 
+### ⛔ NEVER conclude a capability is absent from failed name guesses
+
+Ten guessed `axl3D*` names all returned `nil`, and that was reported as "Allegro
+has no scriptable 3D API". **It has 50 of them, under the `v3D*` prefix.** The
+nils proved the guesses were wrong, nothing more.
+
+Enumerate instead. Both of these were available the whole time:
+
+```skill
+listFunctions("3D")            ; substring match over every bound function
+arglist('v3DBatch)             ; => (objList fileName @optional writeFileOnly ...)
+getd('v3DBatch)                ; => funobj:v3DBatch
+obj->?                         ; field names of any defstruct instance
+```
+
+`arglist` is the safe way to map an unknown API: it returns the exact signature
+**without calling anything**, so nothing fires a modal dialog at the user or
+takes a license. Probing arity by calling with zero arguments is NOT safe — a
+zero-argument function will simply run.
+
+`docs/allegro_skill_index.md` in this repo already listed `axlStepGet` /
+`axlStepSet` and was never checked. Check the index before claiming absence.
+
 ### Do not use `axlDBGetDesign()->name` to test whether a board is open
 
 It reads `nil` **whether or not a design is loaded**, so a nil tells you

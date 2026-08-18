@@ -39,7 +39,8 @@ SKILL evaluation.
 | `bridge/allegro/text_view.py` | Hide the component-text blizzard |
 | `bridge/allegro/snapshot.py` | Dated board copy, keyed to the git commit |
 | `bridge/allegro/board_profile.py` | Loads `board.json` (see below) |
-| `docs/allegro_api_notes.md` | **What actually bites. Read this first.** |
+| `docs/allegro_api_notes.md` | **What actually bites on the Allegro side. Read this first.** |
+| `docs/capture_api_notes.md` | **The Capture `Dbo*` layer** — wire creation, probe safety, why in-session reads lie |
 | `docs/allegro_skill_index.md` | **861 documented `axl*` functions**, by chapter |
 | `skill/pcbDrcAudit.il` | Allegro SKILL — DRC audit, triage, net probe |
 | `tcl/pcbWorkflows/` | The four Capture audit workflows |
@@ -191,6 +192,10 @@ loop that kills Capture, and `axlReportGenerate('list nil)` blocks the Allegro
 bridge despite `nil` meaning "do not show the report". Anything that produces
 user-facing output is suspect from a socket.
 
+**But the interactive command is not the only route.** `PlaceWire` really does
+kill the app -- and `DboPage_NewWireScalar` creates the same wire from the
+database layer with no modal loop at all. See `docs/capture_api_notes.md`.
+
 **What works, and what does not:**
 
 | | Capture | Allegro |
@@ -198,18 +203,27 @@ user-facing output is suspect from a socket.
 | Read anything | ✅ | ✅ |
 | Modify properties | ✅ | ✅ |
 | Create components | ✅ `PlacePart` | ✅ `axlDBCreateSymbol` |
-| **Create traces / wires** | ⛔ **crashes the app** | ✅ `axlDBCreateLine` |
-| Transactions + rollback | ✗ none | ✅ |
+| **Create traces / wires** | ✅ `DboPage_NewWireScalar` (⛔ not `PlaceWire`) | ✅ `axlDBCreateLine` |
+| Transactions + rollback | `StartDBBatchUpdate` / `End`, no rollback | ✅ |
 | Create design / page | ✅ | via `netrev -n` |
-| Save | ✅ | ✅ `axlSaveDesign(?noConfirm t)` |
+| Save geometry | ✅ | ✅ `axlSaveDesign(?noConfirm t)` |
+| **Save property edits** | ⚠ **needs a human GUI save** | ✅ |
 
-The asymmetry is the interesting result. Capture's editing vocabulary is
-**interactive** — `PlaceWire` drives a modal loop and is fatal when called
-from a socket callback, with no database-level alternative. Allegro's is
-**batch** — `axlDBCreate*` writes straight to the database, wrapped in
-`axlDBTransactionStart` / `Commit` / `Rollback`, so a bad edit is undoable
-rather than fatal. Layout automation is therefore the more tractable half,
-which is the opposite of what we assumed going in.
+The asymmetry is smaller than this project long believed. Capture's *command*
+vocabulary is **interactive** — `PlaceWire` drives a modal loop and is fatal
+from a socket callback. But its `Dbo*` **database** layer is not: `DboPage_New*`
+alone exposes 45 constructors, including `NewWireScalar`, `NewNetScalar`,
+`NewPlacedInst`, `NewPort` and `NewJunction`. Wires created that way persist and
+carry real connectivity.
+
+An earlier version of this README stated there was "no database-level
+alternative" to `PlaceWire`. That was wrong, and it was wrong because the API
+had been sampled rather than enumerated — see `docs/capture_api_notes.md`, which
+is largely a catalogue of conclusions this project reached from partial views.
+
+The one genuine asymmetry left is durability: Allegro's `axlSaveDesign` persists
+everything, while Capture's `DboSession_SaveDesign` persists geometry but **not**
+property edits, which still require a human File → Close → Save.
 
 ## Working style
 
