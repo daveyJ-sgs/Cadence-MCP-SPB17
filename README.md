@@ -43,6 +43,7 @@ SKILL evaluation.
 | `docs/capture_api_notes.md` | **The Capture `Dbo*` layer** — wire creation, probe safety, why in-session reads lie |
 | `docs/allegro_skill_index.md` | **861 documented `axl*` functions**, by chapter |
 | `skill/pcbDrcAudit.il` | Allegro SKILL — DRC audit, triage, net probe |
+| `bridge/tcl/capPlaceWire.tcl` | Wire placement from the database layer (see capture notes) |
 | `tcl/pcbWorkflows/` | The four Capture audit workflows |
 | `tcl/capAutoLoad/` | Menu registration; optional server auto-start |
 | `skill/allegro.ilinit` | Auto-load all SKILL tooling at Allegro startup |
