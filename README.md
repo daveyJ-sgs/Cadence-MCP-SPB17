@@ -135,7 +135,7 @@ from bridge.capture_bridge import CaptureBridge
 with CaptureBridge() as cap:
     cap.source_file(".../bridge/tcl/capBridgeQuery.tcl")
 
-    cap.parts()                          # 44 parts as dicts
+    cap.parts()                          # 57 parts as dicts
     cap.connectivity()                   # net -> refdes
     cap.run_workflow("preNetlistCheck")  # full report, as data
     cap.eval("info patchlevel")          # arbitrary TCL inside Capture
@@ -245,7 +245,7 @@ product, endorsed by Cadence, or based on anything but the shipped
 documentation, the shipped example code, and behaviour observed live.
 
 The tooling was developed against a real design rather than a synthetic one —
-a moving-magnet phono preamp, 44 parts over two schematic pages. That design's
+a moving-coil phono preamp, 57 parts over two schematic pages. That design's
 component-level details are intentionally not published here; they are
 irrelevant to the automation and belong to the board, not the repo. Where the
 notes reference a second, unrelated board used as a read-only test fixture, it
