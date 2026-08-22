@@ -899,6 +899,69 @@ Verify with something that reads the header rather than the name.
 
 ---
 
+### Capturing either tool's window at full resolution
+
+`capture image` writes the Allegro canvas at whatever pixel size the canvas
+currently occupies, and Capture has no equivalent at all. When a
+publication-quality image is wanted, or the target is Capture rather than
+Allegro, grab the window from outside the application.
+
+Two obvious routes both fail:
+
+⛔ **`PrintWindow` returns a blank white bitmap.** It reports success, the
+bitmap is the right dimensions, and it contains nothing but the window
+background -- Cadence's GDI canvas does not render through it. `PrintWindow`
+returning `True` is not evidence that anything was drawn; sample a few pixels
+before believing it.
+
+⛔ **A plain screen grab catches whatever is on top.** `CopyFromScreen` copies
+the desktop, not a window, so any overlapping window lands in the middle of
+the drawing. `SetForegroundWindow` is not enough to fix this -- it did not
+reorder against an always-on-top window in testing.
+
+✅ **What works: raise the window to topmost, grab the screen, put it back.**
+
+```powershell
+# $h = (Get-Process | ? { $_.MainWindowTitle -like "*OrCAD Capture*" }).MainWindowHandle
+[Z]::SetWindowPos($h, [IntPtr](-1), 0,0,0,0, 0x0043)   # HWND_TOPMOST
+Start-Sleep -Milliseconds 800                          # let it repaint
+$b   = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+$bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+$g   = [System.Drawing.Graphics]::FromImage($bmp)
+$g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+$bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+[Z]::SetWindowPos($h, [IntPtr](-2), 0,0,0,0, 0x0043)   # HWND_NOTOPMOST -- restore
+```
+
+Restore `HWND_NOTOPMOST` afterwards or the tool stays pinned above everything
+for the rest of the session.
+
+Target the **live window handle**, found by title, rather than launching the
+app by name. On a machine with more than one Cadence release installed, asking
+Windows to open "Capture" can start a second instance from a different install
+tree instead of focusing the one holding the design.
+
+**Cropping.** Screenshots taken for coordinates are usually scaled down from
+the real display, so work out the ratio once and apply it:
+
+```python
+S = 2560 / 1456          # native width / coordinate-frame width
+crop = im.crop((round(x0*S), round(y0*S), round(x1*S), round(y1*S)))
+```
+
+⛔ **Verify the crop by looking at it.** An automated obstruction check written
+here tested for *light* pixels on the assumption that a foreign window would be
+pale. The overlapping window was dark-themed, so it scored 1.6% "clean" while
+covering a third of the drawing. A check tuned to one appearance of a problem
+does not generalise to the next one -- and an image is cheap to inspect
+directly.
+
+**Sizing for a web page.** Measure the width the image will actually be
+displayed at, in CSS pixels, rather than assuming. A figure composed at 840 px
+for a column that turned out to be ~1038 px was upscaled and looked soft, and
+on a hi-DPI display the same source covered twice the device pixels again.
+Compose at or slightly above the real display width.
+
 ### Colour: the palette is writable, the layer's index is not
 
 ```skill
