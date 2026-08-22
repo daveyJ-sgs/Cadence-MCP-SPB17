@@ -449,6 +449,22 @@ class CaptureBridge:
             out.append({"net": r[0], "pin_count": int(r[1]), "refdes": refs})
         return out
 
+    def pin_nets(self) -> dict[str, list[str]]:
+        """Every flat net with PIN-LEVEL membership: net -> ["REFDES.PIN", ...].
+
+        connectivity() gives refdes only, which cannot produce a netlist: it
+        says a part is on the net, not which of its pins. Use this when the
+        answer has to be electrically meaningful -- generating a SPICE deck,
+        tracing a signal path, or checking that a two-terminal part is the
+        right way round.
+        """
+        out: dict[str, list[str]] = {}
+        for r in self._rows("::capBridge::pinNets"):
+            if not r:
+                continue
+            out[r[0]] = parse_tcl_list(r[1]) if len(r) > 1 else []
+        return out
+
     WORKFLOWS = ("preNetlistCheck", "bomScrubber", "hsNetAudit", "netNamingAudit")
 
     def run_workflow(self, name: str) -> list[str]:

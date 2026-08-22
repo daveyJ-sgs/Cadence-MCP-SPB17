@@ -137,6 +137,7 @@ with CaptureBridge() as cap:
 
     cap.parts()                          # 57 parts as dicts
     cap.connectivity()                   # net -> refdes
+    cap.pin_nets()                       # net -> REFDES.PIN  (netlist form)
     cap.run_workflow("preNetlistCheck")  # full report, as data
     cap.eval("info patchlevel")          # arbitrary TCL inside Capture
 ```

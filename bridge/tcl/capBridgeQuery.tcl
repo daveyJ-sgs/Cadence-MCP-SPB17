@@ -522,6 +522,70 @@ proc ::capBridge::connectivity { pList } {
     return [concat [list OK] $rows]
 }
 
+# pinNets {} -> {OK {net {REFDES.PIN ...}} ...}
+#
+# connectivity() answers "which parts are on this net". That is enough for an
+# audit and NOT enough to emit a netlist: it says R1 is on the net, not WHICH
+# END of R1. Every two-terminal part looks symmetric, so a SPICE deck built
+# from it would be guesswork.
+#
+# The pin object is already in hand inside connectivity's traversal --
+# GetPortInst returns the DboPortInst and it is discarded after reading the
+# owner's refdes. This keeps it and reads the pin number as well.
+proc ::capBridge::pinNets { pList } {
+    set d [::pcbWorkflows::_getActiveDesign]
+    if { $d eq "NULL" } { return [::capBridge::_err "no active design"] }
+
+    set rows [list]
+    set rc [catch {
+        set st   [DboState]
+        set NULL NULL
+        set nIter [$d NewFlatNetsIter $st]
+        if { $nIter != $NULL } {
+            set net [$nIter NextFlatNet $st]
+            while { $net != $NULL } {
+                set cs [DboTclHelper_sMakeCString]
+                $net GetName $cs
+                set nm [DboTclHelper_sGetConstCharPtr $cs]
+
+                set refs [list]
+                set pIter [$net NewPortOccurrencesIter $st]
+                set po [$pIter NextPortOccurrence $st]
+                while { $po != $NULL } {
+                    # Any link in this chain can be null on off-page
+                    # connectors and ports; skip the entry rather than abort
+                    # the whole traversal.
+                    catch {
+                        set pi [$po GetPortInst $st]
+                        if { $pi != $NULL } {
+                            set owner [$pi GetOwner]
+                            if { $owner != $NULL } {
+                                set rd [::capBridge::_refDes $owner $st]
+                                set num "?"
+                                catch {
+                                    set c2 [DboTclHelper_sMakeCString]
+                                    $pi GetPinNumber $c2
+                                    set num [DboTclHelper_sGetConstCharPtr $c2]
+                                }
+                                lappend refs "$rd.$num"
+                            }
+                        }
+                    }
+                    set po [$pIter NextPortOccurrence $st]
+                }
+                ::pcbWorkflows::_deleteIter $pIter
+
+                lappend rows [list $nm $refs]
+                set net [$nIter NextFlatNet $st]
+            }
+            ::pcbWorkflows::_deleteIter $nIter
+        }
+    } failed]
+
+    if { $rc != 0 } { return [::capBridge::_err "pinNets: $failed"] }
+    return [concat [list OK] $rows]
+}
+
 #############################################################################
 # WRITE SUPPORT  -- everything above this line is read-only.
 #

@@ -181,3 +181,63 @@ DboTclHelper_sGetConstCharPtr $nm      ;# full path
 
 ⛔ `DboSession_RemoveDesign` **crashes Capture** — it returns success and the
 process disappears. There is no verified programmatic close.
+
+---
+
+## 9. Reading connectivity that is electrically meaningful
+
+A net query that returns reference designators answers "which parts are on
+this net". That is enough for an audit and **not** enough to emit a netlist:
+it says `R1` is on the net, not *which end of `R1`*. Every two-terminal part
+looks symmetric from that view, so anything built on it — a SPICE deck, a
+signal-path trace, a polarity check — is guesswork wearing a data costume.
+
+The pin is already in hand during the traversal. `NewPortOccurrencesIter`
+yields port occurrences, `GetPortInst` returns the `DboPortInst`, and the
+usual pattern reads only its owner's refdes and throws the pin away:
+
+```tcl
+set pi    [$po GetPortInst $st]
+set owner [$pi GetOwner]            ;# -> refdes, and $pi is discarded
+```
+
+Keeping it costs four lines and changes what the data can be used for:
+
+```tcl
+set c2 [DboTclHelper_sMakeCString]
+$pi GetPinNumber $c2
+set num [DboTclHelper_sGetConstCharPtr $c2]
+lappend refs "$rd.$num"
+```
+
+`::capBridge::pinNets` does this; `CaptureBridge.pin_nets()` returns
+`{net: ["REFDES.PIN", ...]}`. On a two-page schematic it returned 32 nets and 149
+pin references with no unresolved pin numbers.
+
+⭐ **The generalisable point: check whether the object you need is already
+inside a traversal you are doing.** This was not a missing API or a
+limitation of the `Dbo*` layer. The pin number had been reachable the whole
+time, one method call from a variable that existed and was being dropped on
+the floor. Before concluding data is unavailable, look at what the existing
+code is discarding.
+
+### Verifying a generated netlist
+
+Emitting a netlist from this data is mechanical, and mechanical translation
+is exactly where a silent transcription error hides. Two cheap guards catch
+almost everything:
+
+* **Every emitted device must have both pins resolve to nets inside the
+  selection.** A pin that resolves to nothing means the selection is wrong,
+  not that the pin is unconnected.
+* **Every net in the selection must end up with at least two connections.**
+  A one-connection net is a dangling node, and SPICE will happily simulate
+  it and return a plausible wrong answer.
+
+The second guard fired the first time it ran here, on an output node whose
+load resistor was being appended *after* the check. The circuit was right and
+the verification order was wrong — which is the failure the guard is for.
+
+⛔ **Do not verify by eye against the schematic.** That confirms the netlist
+matches what you *think* the schematic says. The guards above check the
+netlist against itself, which is a different and more useful question.
