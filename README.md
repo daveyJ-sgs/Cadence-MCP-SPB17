@@ -8,11 +8,7 @@ Capture through its first-party text API and reads back real database state.
 No screenshots, no GUI scripting. Developed and tested while designing an op-amp
 based phono preamplifier.
 
-```
-                          ┌──TCP 9020──▶ OrCAD Capture     (schematic DB)
-MCP client ──▶ cadence_mcp.py
-                          └──TCP 9030──▶ Allegro PCB Editor (board DB)
-```
+![One MCP server, cadence_mcp.py, holding a live TCP connection into each application: port 9020 into OrCAD Capture with read, place and save access, and port 9030 into Allegro PCB Editor with read and SKILL evaluation access.](docs/images/bridge-architecture.svg)
 
 **Both tools, one MCP server, 12 tools.** Capture supports read, property
 modification, part placement and save. Allegro supports read and arbitrary

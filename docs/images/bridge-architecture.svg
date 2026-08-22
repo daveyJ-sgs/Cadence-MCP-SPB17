@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 260" role="img" aria-label="One MCP server, cadence_mcp.py, exposing two live TCP bridges: port 9020 into OrCAD Capture's schematic database with read, place and save access, and port 9030 into Allegro PCB Editor's board database with read and SKILL evaluation access." font-family="Georgia, 'Times New Roman', serif">
+  <rect x="0" y="0" width="640" height="260" rx="6" fill="#10171c" />
+  <defs>
+    <marker id="bd-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#dde6ea" />
+    </marker>
+    <marker id="bd-arrow-ch1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#f0b23d" />
+    </marker>
+    <marker id="bd-arrow-ch2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#45c6d6" />
+    </marker>
+  </defs>
+
+  <!-- client -> server -->
+  <path d="M126,128 H208" stroke="#dde6ea" stroke-width="1.5" fill="none" marker-end="url(#bd-arrow)" />
+  <text x="167" y="119" text-anchor="middle" font-size="10.5" fill="#74858d">MCP tool calls</text>
+
+  <!-- server -> Capture (amber, ch1) -->
+  <path d="M380,112 H396 V46 H460" stroke="#f0b23d" stroke-width="1.5" fill="none" marker-end="url(#bd-arrow-ch1)" />
+  <text x="428" y="38" text-anchor="middle" font-size="10.5" fill="#f0b23d">TCP 9020</text>
+
+  <!-- server -> Allegro (cyan, ch2) -->
+  <path d="M380,144 H396 V214 H460" stroke="#45c6d6" stroke-width="1.5" fill="none" marker-end="url(#bd-arrow-ch2)" />
+  <text x="428" y="206" text-anchor="middle" font-size="10.5" fill="#45c6d6">TCP 9030</text>
+
+  <!-- client box -->
+  <rect x="8" y="102" width="118" height="52" rx="3" fill="none" stroke="#dde6ea" stroke-width="1.2" />
+  <text x="67" y="123" text-anchor="middle" font-size="12" fill="#dde6ea" font-weight="600">MCP client</text>
+  <text x="67" y="140" text-anchor="middle" font-size="9.5" fill="#74858d">Claude Code, etc.</text>
+
+  <!-- server box -->
+  <rect x="208" y="102" width="172" height="52" rx="3" fill="none" stroke="#dde6ea" stroke-width="1.2" />
+  <text x="294" y="123" text-anchor="middle" font-size="12" fill="#dde6ea" font-weight="600" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">cadence_mcp.py</text>
+  <text x="294" y="140" text-anchor="middle" font-size="9.5" fill="#74858d">12 tools</text>
+
+  <!-- Capture box: three lines, title / what it stores / what's exposed -->
+  <rect x="460" y="13" width="170" height="66" rx="3" fill="none" stroke="#f0b23d" stroke-width="1.2" />
+  <text x="545" y="37" text-anchor="middle" font-size="12" fill="#dde6ea" font-weight="600">OrCAD Capture</text>
+  <text x="545" y="53" text-anchor="middle" font-size="9.5" fill="#74858d">schematic DB</text>
+  <text x="545" y="68" text-anchor="middle" font-size="9" fill="#a3862f">read &#183; place &#183; save</text>
+
+  <!-- Allegro box -->
+  <rect x="460" y="181" width="170" height="66" rx="3" fill="none" stroke="#45c6d6" stroke-width="1.2" />
+  <text x="545" y="205" text-anchor="middle" font-size="12" fill="#dde6ea" font-weight="600">Allegro PCB Editor</text>
+  <text x="545" y="221" text-anchor="middle" font-size="9.5" fill="#74858d">board DB</text>
+  <text x="545" y="236" text-anchor="middle" font-size="9" fill="#348d99">read &#183; SKILL eval</text>
+</svg>
