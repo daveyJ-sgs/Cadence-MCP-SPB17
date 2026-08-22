@@ -205,6 +205,8 @@ database layer with no modal loop at all. See `docs/capture_api_notes.md`.
 | Create design / page | ✅ | via `netrev -n` |
 | Save geometry | ✅ | ✅ `axlSaveDesign(?noConfirm t)` |
 | **Save property edits** | ⚠ **needs a human GUI save** | ✅ |
+| Set layer colour | — | ⚠ palette RGB only; per-layer index is read-only |
+| Export a board image | — | ⚠ `capture image` (canvas grab); SVG export is licence-gated |
 
 The asymmetry is smaller than this project long believed. Capture's *command*
 vocabulary is **interactive** — `PlaceWire` drives a modal loop and is fatal

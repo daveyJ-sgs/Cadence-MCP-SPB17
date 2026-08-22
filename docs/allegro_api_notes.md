@@ -761,7 +761,234 @@ file.
 
 ---
 
-## 14. Rules that generalise
+## 14. Screenshots, colour, and four ways to kill the bridge
+
+A morning spent getting one clean board image produced more traps than the
+image was worth. Most of them are not about images at all.
+
+### NEVER: `arglist` and `boundp` need a QUOTED symbol
+
+SKILL keeps function and variable bindings in **separate namespaces**. These
+look like proof that a function does not exist, and are not:
+
+```skill
+arglist(axlShell)     ; *Error* eval: unbound variable - axlShell
+boundp('axlShell)     ; nil    -- checks the VARIABLE binding
+axlShell("...")       ; works fine, it was always there
+```
+
+Correct form:
+
+```skill
+arglist('axlShell)    ; (t_string "t")
+getd('axlShell)       ; lambda:axlShell  -- nil means NOT LOADED
+```
+
+A dozen functions were written off as "unbound" from the first spelling.
+
+### Autoload stubs: named but not loaded
+
+`listFunctions` reports names the session has never loaded. For those,
+`getd('name)` is `nil` while `arglist('name)` still returns the **arity** --
+with the argument names stripped if the code is compiled:
+
+```skill
+arglist('SOME_COMPILED_Run)   ; (arg arg arg arg)  -- four args, no names
+```
+
+Arity without names is not enough to call something safely. Four positional
+arguments of unknown type and order is a guess, not an API.
+
+### NEVER: `listFunctions` takes a REGEX, and it needs a literal first character
+
+```skill
+listFunctions("*Plot*")          ; *Error* rexMatchList: Empty closure
+listFunctions("axl.*[Pp]lot.*")  ; works
+```
+
+A leading `*` is not a wildcard here, it is invalid regex.
+
+### NEVER: `axlShell` returns `t` for a command that does not exist
+
+```skill
+axlShell("tbx svgexport")   ; => t
+```
+
+`t` means *the string was accepted*, not *the command ran*. The journal is the
+record:
+
+```
+allegro.jrl:  (00:25:07) Command not found: tbx svgexport
+```
+
+**Check `allegro.jrl` after any `axlShell`.** Same family as `axlDBAddProp`
+returning a non-nil error string, and as the `->color` write below.
+
+### NEVER: a modal dialog freezes the bridge completely
+
+The SKILL side receives data through an `ipcBeginProcess` data handler, and
+those callbacks **only fire when Allegro is idle**. Any modal dialog -- a file
+save box, a form -- stalls the relay until it is dismissed. The helper then
+reports `__TIMEOUT__ no response from SKILL`.
+
+Diagnosis without the bridge, typed at the `Command:` prompt:
+
+```
+skill abStatus()      ; child=ipc:1 port=9030 alive=t
+```
+
+If that answers, SKILL is healthy and only the relay is stalled.
+
+### NEVER: one line per exchange -- a large response desyncs the channel for good
+
+Enumerating the whole symbol table letter by letter returns **thousands of
+names on a single line** (~13,800 symbols total). It succeeded once and timed
+out on the second attempt, and every call after that was dead -- a
+half-consumed response leaves the framing out of step permanently.
+
+Recovery, one line at a time at the `Command:` prompt:
+
+```
+skill abStop()
+skill abStart()
+```
+
+Filter in SKILL and return a count or a short list. Do not stream the symbol
+table across a line-framed channel.
+
+---
+
+### Getting an image out: three routes, and which one is licensed
+
+| Command | Availability | What it produces |
+|---|---|---|
+| `tbx svgexport` | GATED behind `_allegro_option_prodtoolbox` / `_orcad_option_prodtoolbox` | vector SVG, fully profile-driven |
+| `pdf out` | available | **film-based** -- one page per artwork film, not the canvas |
+| `capture image` | available | canvas grab, full colour, honours the current view |
+
+`capture image` is the one to use for a picture of the board. `pdf out` looks
+right until you read `pdf_out.form` and see it is driven by an *Available
+Films* tree.
+
+The SVG exporter's profile format is worth knowing about even though it is
+gated -- `share/pcb/toolbox/config/svgexport/*.profile` defines image size,
+background, per-group layer sets, colours and opacity. The code itself lives
+compiled in `share/pcb/etc/context/64bit/toolbox.cxt`.
+
+### Form field names are on disk
+
+```
+<CDS_ROOT>/share/pcb/text/forms/*.form
+```
+
+and menu entries show the syntax for driving a form without a human:
+
+```
+done;place manual;setwindow form.plc_manual;FORM plc_manual library YES
+```
+
+NEVER assume this covers every dialog. It works for Allegro FORMs. A native
+Windows file-save dialog is **not** a FORM and has no field names --
+`capture image` ends in one, so it cannot be fully scripted this way.
+
+### NEVER: the file extension is not the format
+
+`capture image` wrote a **BMP** with PNG selected in the Files-of-type
+dropdown; the format appears to follow a typed extension, not the filter.
+Verify with something that reads the header rather than the name.
+
+---
+
+### Colour: the palette is writable, the layer's index is not
+
+```skill
+axlLayerGet("ETCH/TOP")->color        ; => palette INDEX, e.g. 57
+axlColorGet(57)                       ; => (38 255 38)   INDEX in, RGB out
+axlColorSet(57 list(240 170 60))      ; writes the PALETTE ENTRY
+axlColorSave("f.color") / axlColorLoad("f.color")
+```
+
+NEVER pass a layer name to `axlColorGet`. It takes an **index**.
+`axlColorGet("ETCH/TOP")` returns `nil`, which reads like "no colour" and
+means "wrong argument type".
+
+NEVER trust a `->color` assignment. **The per-layer colour index is
+read-only.** The assignment returns the value you assigned, which looks
+exactly like success:
+
+```skill
+axlLayerGet(lay)->color        ; 24
+axlLayerGet(lay)->color = 100  ; => 100
+axlLayerGet(lay)->color        ; still 24
+```
+
+NEVER edit a palette entry without checking who else uses it. **Layers share
+indices.** On a stock 4-layer setup one index was shared by the bottom etch
+layer, the design outline, and both silkscreen classes -- so those four cannot
+be given different colours from SKILL at all. Map the indices first and look
+for collisions before writing anything.
+
+`axlColorSave` writes only the 192-entry palette -- it does **not** record
+which layer uses which index, so it is a restore path for colours and nothing
+more. There is no transparency API.
+
+### Layer priority controls draw order
+
+```skill
+axlLayerPriorityGet("ETCH/TOP")      ; 0 on a design that has never set one
+axlLayerPrioritySet("ETCH/TOP" 5)    ; higher number draws on top
+```
+
+Default is `0` for everything, which means opaque plane pours paint over the
+routing. This is display state in the `.brd`, same as visibility.
+
+### Enumerating subclasses properly
+
+```skill
+axlSubclasses("ETCH")            ; ("TOP" "GND" "PWR" "BOTTOM")
+axlColorOnGet("CLASS/SUBCLASS")  ; t / nil, per subclass
+```
+
+Use these when a class-level `visible` reading is doing the deciding. Section
+8 is right that `t` means all-on, but a class summary read at the wrong moment
+is still a summary -- enumerate the subclasses and ask each one.
+
+### Framing a view
+
+```skill
+axlDBGetDesign()->bBox                  ; the DRAWING extent -- not the board
+axlDBGetDesign()->designOutline->bBox   ; the board outline
+axlZoomBbox(bbox)                       ; returns the view it actually used
+```
+
+NEVER frame to `design->bBox`. It is the drawing sheet, typically a large
+round number that has nothing to do with the board. Also note **symbols can
+overhang the board outline** (edge-mounted connectors routinely do), so fit to
+the union of the outline and every symbol `->bBox`, not to the outline alone.
+
+`axlZoomFit` needs a bBox argument; there is no zero-argument form.
+
+### Inventory of a footprint's geometry
+
+```skill
+mapcar(lambda((c) sprintf(nil "%s@%s" c->objType c->layer)) sym->children)
+;; => ("text@REF DES/SILKSCREEN_TOP" "shape@PACKAGE GEOMETRY/PLACE_BOUND_TOP"
+;;     "polygon@PACKAGE GEOMETRY/SILKSCREEN_TOP" ...)
+```
+
+NEVER write `c->layer->name`. `c->layer` is **already a string**, and the
+chained form errors with `get/getq: first arg must be either symbol, list,
+defstruct or user type`.
+
+This answers "is there more detail available for this part, or is the outline
+all there is" as a fact rather than an opinion -- and it also explains
+connector bodies that look broken on screen: some footprints draw the body as
+several **open paths** rather than a closed polygon, and the gaps are in the
+footprint, not the renderer.
+
+---
+
+## 15. Rules that generalise
 
 1. **Look commands up; never guess.** `docs/allegro_skill_index.md` lists 861
    `axl*` functions. Journaling (`SetOptionBool Journaling TRUE` +
@@ -790,3 +1017,13 @@ file.
 9. **A smaller artifact is not automatically a worse one.** Diff the file list
    before believing a size change. A fab package that shrank 7x had gained
    copper and lost only two copies of the design database.
+10. **An error that names a symbol may be about how you asked, not whether it
+   exists.** `arglist(foo)` reports *unbound variable* for a function that
+   works perfectly, because functions and variables are different namespaces
+   and it wanted `arglist('foo)`. Several APIs were declared missing this way
+   before the quote was tried. Distinguish "absent" from "asked wrong".
+11. **Ask a channel for less than it can carry.** A line-framed relay does not
+   fail loudly on an oversized response; it desynchronises and every later
+   call dies. Filter on the SKILL side and return a count or a short list.
+
+---
