@@ -233,7 +233,7 @@ different signatures, or crash outright.
 
 And the sharpest lesson from this project: **`catch` with a plausible default
 turns API misuse into confident wrong data.** `_getRefDes` returned `"?"` for
-every part for months because a two-argument call was made with one argument —
+every part for days because a two-argument call was made with one argument —
 and `"?"` is indistinguishable from a genuinely unannotated part. Three
 separate bugs of this shape inflated one audit from 3 real errors to 89.
 Prefer defaults that cannot be mistaken for real values.
