@@ -5,27 +5,82 @@
     "is why it is configured rather than committed. The tools refuse to run",
     "without it rather than silently checking nothing."
   ],
-
   "board": "C:/path/to/your/design.brd",
   "snapshots": "C:/path/to/your/snapshots",
-
   "place_check": {
-    "primary_nets": ["MAINS_L", "MAINS_N"],
+    "primary_nets": [
+      "MAINS_L",
+      "MAINS_N"
+    ],
     "mounting_holes": [
-      [1200.0, 1200.0, 130.0],
-      [8800.0, 3800.0, 130.0]
+      [
+        1200.0,
+        1200.0,
+        130.0
+      ],
+      [
+        8800.0,
+        3800.0,
+        130.0
+      ]
     ],
     "aggressor": "T1",
-    "sensitive": { "left": "LEFT_INPUT", "right": "RIGHT_INPUT" },
+    "sensitive": {
+      "left": "LEFT_INPUT",
+      "right": "RIGHT_INPUT"
+    },
     "channel_net_pairs": [
-      ["LEFT_INPUT", "RIGHT_INPUT"],
-      ["LEFT_OUTPUT", "RIGHT_OUTPUT"]
+      [
+        "LEFT_INPUT",
+        "RIGHT_INPUT"
+      ],
+      [
+        "LEFT_OUTPUT",
+        "RIGHT_OUTPUT"
+      ]
     ],
-    "symmetry_pairs": [["J1", "J2"], ["J3", "J4"]]
+    "symmetry_pairs": [
+      [
+        "J1",
+        "J2"
+      ],
+      [
+        "J3",
+        "J4"
+      ]
+    ]
   },
-
   "plane_pairs": {
     "_comment": "per plane net: pins that must share one via offset, so the two channels come out identical by construction",
-    "GROUND_RETURN": [["C1.1", "C2.1"], ["R1.1", "R2.1"]]
+    "GROUND_RETURN": [
+      [
+        "C1.1",
+        "C2.1"
+      ],
+      [
+        "R1.1",
+        "R2.1"
+      ]
+    ]
+  },
+  "render3d": {
+    "_comment": "render3d/: OBJ from 3D Canvas File > Export, placement from step_mapping.py dump, the .step files, output root, optional closeups (az/el deg, dist and focal in mm)",
+    "obj": "C:/path/to/3d/export/board.obj",
+    "placement": "C:/path/to/3d/export/placement.json",
+    "step_dir": "C:/path/to/allegro/step",
+    "out": "C:/path/to/3d",
+    "closeups": [
+      {
+        "name": "closeup_connectors",
+        "az": 150,
+        "el": 28,
+        "dist": 120,
+        "focal": [
+          185.0,
+          92.0,
+          6.0
+        ]
+      }
+    ]
   }
 }

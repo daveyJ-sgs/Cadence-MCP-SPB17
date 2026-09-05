@@ -1088,5 +1088,106 @@ footprint, not the renderer.
 11. **Ask a channel for less than it can carry.** A line-framed relay does not
    fail loudly on an oversized response; it desynchronises and every later
    call dies. Filter on the SKILL side and return a count or a short list.
+12. **A viewer's mouse handler is not a camera API.** Rotation about screen axes with
+   accumulated trackball state cannot be composed into a turntable, however many
+   calibration runs you throw at it. Export the geometry and own the camera (§16).
+13. **A call that cannot fail is not verification.** `axlStepSet` returns `t` whether or
+   not the STEP file exists; the `STEP3D_<symdef>` attachment is what proves the model
+   was read. Find the artefact the success would have produced and check for that.
 
 ---
+
+
+## 16. STEP models, the 3D Canvas, and getting a render out
+
+A 57-part board went from no 3D models to a full turntable video in one session. The
+mapping side is scriptable and pleasant; the viewer is not, and the way out was to stop
+fighting it. Tools: `bridge/allegro/step_mapping.py`, `bridge/allegro/canvas_capture.ps1`,
+`render3d/`.
+
+### Mapping from SKILL works — and the attachment list is the proof
+
+```skill
+axlStepGet(nil 'primary "SMC0805")      ; nil, or (nil objType "step" rotation_z .. offset_x .. step_name "x.step")
+axlStepSet('primary "SMC0805" "C_0805_2012Metric.step"
+           '(offset_x 42.0 offset_y 0.0 offset_z 0.0 rotation_x 0.0 rotation_y 0.0 rotation_z 0.0))
+axlStepDelete('primary "SMC0805")
+axlSetVariable("steppath" "C:/proj/allegro/step")     ; honoured in-session, forward slashes
+setof(n axlGetAllAttachmentNames() rexMatchp("^STEP3D_" n))   ; ("STEP3D_SMC0805" ...)
+```
+
+- Offsets are **design units** (mils on a mils board), rotations degrees. The transform is
+  model → Rx → Ry → Rz → + offset → instance rotation (CCW) → instance xy, with the model's
+  z = 0 on the top copper. Verified against the canvas, including a 180° X flip.
+- ⛔ **`t` from `axlStepSet` means "mapping recorded", not "file found".** When the file *is*
+  found Allegro tessellates it immediately and attaches the facets to the database as
+  `STEP3D_<symdef>`. That attachment is the only evidence the model will draw. Check it —
+  same family as §5's "not nil is not a success test".
+- **Vendor footprints arrive pre-mapped to files you do not have.** Seven of fifteen `.dra`
+  files on this board carried `PKGDEF_STEP_FILE` from a library service. `axlStepGet('map ..)`
+  reports them mapped; the attachment list shows nothing behind it. Delete and remap.
+- Mapping is per **symdef** (package) or per **compdef** (device) — never per refdes. Two
+  jacks sharing one device cannot be different colours through the mapping. What works: a
+  pin-less mechanical symbol carrying its own model, instanced at the part:
+
+  ```skill
+  axlDBCreateSymDefSkeleton(list("RED_SHELL" "mechanical") list(-270.0:-575.0 270.0:280.0))
+  axlDBCreateSymbol(list("RED_SHELL" "mechanical") 8200.0:3839.0 nil 180.0)
+  axlStepSet('primary "RED_SHELL" "shell_red.step" '(rotation_x 180.0 offset_z 227.0 ...))
+  ```
+
+  No pins, no place bound, DRC count unchanged, invisible to the netlist. The skeleton's
+  extents do get exported by the OBJ export as a grey box (see below).
+- `axlSaveDesign(?noConfirm t)` persists mappings and attachments. The canvas being open
+  does not block the save.
+
+### The 3D Canvas is a viewer, not a camera
+
+- `axlShell("3d")` opens it; calling it again only raises the window. **Mapping changes are
+  not picked up while it is open** — send `WM_CLOSE` to the `Allegro 3D Canvas:` window
+  (`canvas_capture.ps1 -Mode close`) and open it again.
+- **Numpad view keys** (the doc says only "use the NumLock keys"): 1 isometric, 8 top,
+  2 bottom, 5 front, 4 and 6 the two end views, 9 / 3 zoom in / out. 0 . + - * / and the
+  arrow keys do nothing. Presets change orientation only; the zoom is kept.
+- **Mouse rotation is about the screen axes, with trackball state.** Shift+middle drag from
+  the *front* preset spins cleanly about Z at ~1° per pixel (1519 px viewport). From any
+  elevated view the same drag tumbles the board. The vertical drag's sign flips with the
+  accumulated state, and after enough drags the presets themselves start from a flipped
+  up-vector. Ten calibration runs could not make a turntable out of it. **Do not build a
+  camera on a viewer's mouse handler.**
+- Colour themes live in `%HOME%\pcbenv\Allegro3DCanvasPreferences.xml`. "Design colors"
+  takes the soldermask colour from the 2D layer palette, which is why the board looked grey
+  under a black theme; the fixed themes' RGB values in the XML *are* honoured, background
+  included. Edit with the canvas closed; back the file up first.
+- Capturing the window: `PrintWindow` is blank (as §14); the viewport is the largest child
+  window of the frame; call `SetProcessDPIAware` before reading rectangles; pin the window
+  TOPMOST for the grab and restore it. All in `canvas_capture.ps1`.
+- **File > Export is a Qt file dialog, not a FORM** — no field names to drive. Formats:
+  ACIS, HMF, HSF, IGES, JPEG, OBJ, PDF 2D/3D, PLY, PNG, STL, STEP. The OBJ:
+  - design units, `f -1 -3 -5 ...` negative relative indices, polygons up to 27 vertices
+    (pad outlines) — triangulate with something that handles concave faces;
+  - one material per copper/plating/mask/silk/dielectric layer, with colour (`Kd`) and,
+    for the mask, `Tf 0.27` = 73 % opaque;
+  - ⛔ **every STEP model in ONE material with no `Kd` at all**, and each mechanical
+    symbol's extents as a grey (`0.267`) box. A good board mesh and a useless component mesh.
+
+### Rendering it properly (`render3d/`)
+
+- Board from the OBJ; components re-instanced from the local STEP files using a placement
+  dump (`step_mapping.py dump`) and the transform above. `z_top` = highest copper z in the
+  OBJ (62.4 mil on a 1.6 mm board).
+- STEP colours need XCAF: `STEPCAFControl_Reader` with colour mode, per-face
+  `ColorTool.GetColor(shape, XCAFDoc_ColorSurf, c)`, per-label via the *static*
+  `GetColor_s(label, ...)` — the instance method on a label raises a type error.
+  `cadquery.importers.importStep` throws colours away.
+- KiCad packages3D models: mm, Z up, origin at the footprint origin — body centre for SMD,
+  pin 1 for through-hole. An Allegro footprint whose origin is pin 1 (the 0805/1206/1210
+  here) needs `offset_x` = half the pin pitch; a footprint centred between the pins
+  (5 mm film caps) needs `offset_x` = −pitch/2.
+- A vendor jack STEP had its pins on +Z and its origin mid-housing: slice the solid at a few
+  z levels (cadquery `section`) to find the pins and the housing bottom, then
+  `rotation_x 180` + `offset_z` = housing bottom.
+- PyVista (0.48, VTK 9.6 — cp314 wheels exist, as for cadquery-ocp 7.9): call
+  `plotter.render()` before `screenshot()` or an off-screen plotter returns the *previous*
+  frame; `enable_shadows()` breaks depth-peeled transparency; near-black plastics need a
+  colour floor; the bottom view needs a light from below. About 3 s per 1080p frame.

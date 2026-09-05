@@ -35,6 +35,11 @@ SKILL evaluation.
 | `bridge/allegro/text_view.py` | Hide the component-text blizzard |
 | `bridge/allegro/snapshot.py` | Dated board copy, keyed to the git commit |
 | `bridge/allegro/board_profile.py` | Loads `board.json` (see below) |
+| `bridge/allegro/step_mapping.py` | **STEP models: list / set / apply / dump placement / mechanical symbols / open-close the 3D Canvas** |
+| `bridge/allegro/canvas_capture.ps1` | Drive and capture the Allegro 3D Canvas window: size, grab, numpad views, drags |
+| `render3d/render_board.py` | **Offline renders and turntables** from the canvas OBJ export + the STEP files |
+| `render3d/step_tess.py` | Colour-preserving STEP tessellation (OCP / XCAF) |
+| `render3d/make_video.py` | Frames → MP4, 1:1 crop, GIF, crossfaded cut (bundled ffmpeg) |
 | `docs/allegro_api_notes.md` | **What actually bites on the Allegro side. Read this first.** |
 | `docs/capture_api_notes.md` | **The Capture `Dbo*` layer** — wire creation, probe safety, why in-session reads lie |
 | `docs/allegro_skill_index.md` | **861 documented `axl*` functions**, by chapter |
@@ -208,6 +213,8 @@ database layer with no modal loop at all. See `docs/capture_api_notes.md`.
 | **Save property edits** | ⚠ **needs a human GUI save** | ✅ |
 | Set layer colour | — | ⚠ palette RGB only; per-layer index is read-only |
 | Export a board image | — | ⚠ `capture image` (canvas grab); SVG export is licence-gated |
+| **Map STEP models** | — | ✅ `axlStepSet`; facet data attached, proof in `axlGetAllAttachmentNames()` |
+| Render the 3D board | — | ⚠ 3D Canvas has no camera API — export OBJ, render offline (`render3d/`) |
 
 The asymmetry is smaller than this project long believed. Capture's *command*
 vocabulary is **interactive** — `PlaceWire` drives a modal loop and is fatal
@@ -224,6 +231,21 @@ is largely a catalogue of conclusions this project reached from partial views.
 The one genuine asymmetry left is durability: Allegro's `axlSaveDesign` persists
 everything, while Capture's `DboSession_SaveDesign` persists geometry but **not**
 property edits, which still require a human File → Close → Save.
+
+## 3D: STEP models and renders
+
+The mapping side of Allegro's 3D support is fully scriptable: `step_mapping.py` maps a
+model per package with offsets and rotations, verifies that Allegro actually read the file
+(the `STEP3D_<symdef>` attachment — the return value alone lies), dumps every placement, and
+can plant pin-less mechanical symbols for the one thing mapping cannot do, a per-instance
+difference such as a red and a white jack sharing one device.
+
+The viewer is not scriptable. The 3D Canvas rotates about screen axes with trackball state,
+its presets keep stale zoom, and its OBJ export merges every STEP model into one uncoloured
+material. So `render3d/` takes the board from that export and re-instances the components
+from the STEP files, with an exact camera: 4K stills, a 360° turntable and a reveal move,
+encoded to MP4 / square / GIF. Set-up and the traps are in `render3d/README.md`; the API
+findings are `docs/allegro_api_notes.md` §16.
 
 ## Working style
 
