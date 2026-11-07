@@ -241,3 +241,22 @@ the verification order was wrong — which is the failure the guard is for.
 ⛔ **Do not verify by eye against the schematic.** That confirms the netlist
 matches what you *think* the schematic says. The guards above check the
 netlist against itself, which is a different and more useful question.
+
+## 10. Renaming power symbols from the database
+
+Power and off-page symbols are `DboGlobal` objects, reached per page with
+`$page NewGlobalsIter $st` / `$iter NextGlobal $st`. They expose `GetName` and
+**`SetName`** (`DboGlobal_SetName`, the only `*Name*` method on the class). Renaming the
+six power symbols on a page (two rail names, three symbols each) was six `SetName` calls, and the
+symbols redrew with the new text in the GUI at once.
+
+⛔ **The flattened net table does not follow.** `pinNets` kept reporting the old rail name with
+the op-amp pins on it after the rename, while the globals iterator already said the new one. Same
+cache as §3: derived net tables are built at load. After the engineer saved and the
+design was re-read, the table showed 32 nets and the old names were gone. So: rename,
+have a human save, verify from a fresh load -- never from the session that did the rename.
+
+Also seen the same day: a part placed from a SamacSys-generated OLB carries
+`Manufacturer_Name` and `Manufacturer_Part_Number`, not the `PART_NUMBER` / `Part Number`
+/ `Manufacturer` trio the rest of a design (and the BOM tooling) reads. Write all three
+after placing (`::capBridge::setPartProp`, §5/§6 rules apply).

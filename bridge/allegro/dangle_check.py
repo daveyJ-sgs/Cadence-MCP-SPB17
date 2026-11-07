@@ -36,7 +36,7 @@ import sys
 import pathlib
 import re
 
-ROOT = pathlib.Path(r"C:\Users\16023\Documents\Claude_projs\Cadence")
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from bridge.allegro.allegro_client import AllegroBridge  # noqa: E402
 

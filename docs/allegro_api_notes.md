@@ -1191,3 +1191,191 @@ setof(n axlGetAllAttachmentNames() rexMatchp("^STEP3D_" n))   ; ("STEP3D_SMC0805
   `plotter.render()` before `screenshot()` or an off-screen plotter returns the *previous*
   frame; `enable_shadows()` breaks depth-peeled transparency; near-black plastics need a
   colour floor; the bottom view needs a light from below. About 3 s per 1080p frame.
+
+## 17. Animating a board build without touching the database
+
+Goal: a social-media clip of a board placing and routing itself, captured from the live
+Allegro canvas, on one of the demo boards Cadence ships
+(`share/pcb/examples/board_design/cds_routed.brd`, 59 symbols, 110 nets, 4 layers) so
+nothing proprietary is on screen. `bridge/allegro/board_anim.py` does it; this is what it
+took to find the mechanism.
+
+### The mechanism: per-net custom colour
+
+```skill
+axlColorSet(180 list(0 0 0))                          ; a spare palette slot, background-black
+axlCustomColorObject(axlDBFindByName('net "D0") 180)  ; whole net -- clines, vias, pins -- vanishes
+axlClearObjectCustomColor(axlDBFindByName('net "D0")) ; and comes back in its layer colours
+axlCustomColorObject(pin 2)                           ; a symbol's pins, one by one, to PIN/TOP's slot
+```
+
+- **Net-level works and round-trips.** Pixel diff against a pristine capture after
+  paint-then-clear: one 3×15 px region. Nothing in the database changes, so no ratsnest
+  appears and nothing needs undoing.
+- ⛔ **A cline will not take a custom colour.** `axlCustomColorObject` on a `path` returns
+  `nil` and draws nothing different; on its `line` segment likewise. Vias and pins return `t`.
+  Colour the *net*, not its children.
+- ⛔ **A symbol takes the colour but will not give it back.** `axlCustomColorObject(sym 180)`
+  returns `t`; `axlClearObjectCustomColor(sym)` returns `nil` and the pins stay painted.
+  Clear the pins individually -- `foreach(p sym->pins axlClearObjectCustomColor(p))` -- or
+  paint them to the layer's own slot, which is pixel-identical to cleared.
+- ⛔ **Palette index 0 is not "black" for a custom colour.** Painting a symbol with 0 drew its
+  pins white. Set a spare slot (180 here; the palette has 192) to the background colour.
+
+### Three dead ends, so nobody walks them again
+
+- **Highlight.** `axlHighlightObject(obj)` renders as a dotted overlay, and the optional
+  second argument is not a colour index (185 set to red, 186 to white: both drew the same
+  pattern). Fine for pointing at a net, useless for a reveal.
+- **Delete-and-reverse.** Deleting each net's clines and vias (then playing the frames
+  backwards) does work -- but every deleted connection grows a ratsnest line, in pin colours,
+  and nothing hides it: `unrats all`, `axlRatsnestBlank`, `display_norats` all left the
+  pixels unchanged. And the board is destroyed, `axlShell("undo")` does nothing from the
+  bridge, so every retry is a relaunch.
+- ⛔ **`axlDeleteObject` returns `nil` after any `axlShell` command.** `zoom in`,
+  `dehilight all` -- each leaves a GUI command active, and while one is, every write is
+  silently discarded (handoff rule: `axlSaveDesign` returning `nil` is the tell).
+  `axlShell("cancel")` clears it; the next delete returns `t`. `silk_check.py` already
+  checks for this; the animation script cancels before every edit phase.
+
+### Framing
+
+- ⛔ **`axlZoomBbox` did nothing visible** across three attempts (returned the current
+  window, canvas unchanged). **`axlWindowBoxSet(bbox)` is the scriptable camera.** It grows
+  the box to the canvas aspect from the *left edge*, which pushes a portrait board
+  off-centre; pre-fit the aspect about the box centre and pass that. An eased sequence of
+  boxes is a dolly zoom; `axlShell("zoom fit")` and `"zoom in"` work too but about the
+  canvas centre only.
+- The plane layers on this demo board draw as a dot raster with black clearance voids.
+  At board scale it reads as texture; at a 3× detail zoom the voids read as holes. No
+  display variable found changes it (`dynshapefill`, `display_plated_holes` and friends
+  were all unset and setting them changed 0 px), so the clip leaves the planes off.
+
+### Bridge hygiene after `taskkill`
+
+Killing `allegro.exe` orphans its `allegro_helper.py`. The next Allegro's `abStart()` binds
+**a second listener on the same port** (both show `LISTENING 127.0.0.1:9030`), connections
+land on the orphan, and every call reports `connection closed by helper`. Kill every PID
+`netstat -ano` lists for the port before relaunching; `relaunch.sh` in the animation
+folder does exactly that, then polls a real query (`length(design->symbols)`) rather than
+the ping, which the orphan answers happily.
+
+The same thing happens *without* a kill: a long capture run desynced the channel (the
+command log showed a SKILL string cut mid-expression -- `"...ustomColorObject(p 180))"`,
+*unclosed at EOF*), and `skill abStop()` at the Command prompt reported `stopped` but
+left its helper process alive. `skill abStart()` then put a second listener beside it and
+every client call got `connection closed by helper`. So after any `abStop`/`abStart`
+cycle: `netstat -ano | findstr :9030`, and `taskkill /F /PID` the older python before
+trusting the bridge. The Command prompt can be driven from outside -- click the
+`Command >` box, type `skill abStop()`, Enter -- which is how this run was recovered
+without the engineer at the keyboard.
+
+### ⛔ ctypes: `SetWindowPos(h, -1, ...)` never goes topmost on x64
+
+`HWND_TOPMOST` is `(HWND)-1`. Passed as a bare Python int through ctypes it is marshalled
+as a 32-bit `c_int`, lands in the 64-bit handle slot as `0x00000000FFFFFFFF`, and
+`SetWindowPos` fails -- silently, returning 0 that nobody checks. The window's extended
+style never gains `WS_EX_TOPMOST` (0x8) and the grab films whatever is in front. It
+*looked* like it worked for several runs only because `SetForegroundWindow` happened to
+succeed; the moment another app held the foreground (this IDE, during a capture-use
+session) every frame was that app's window. Declare `SetWindowPos.argtypes` with
+`wintypes.HWND` and pass `HWND(-1)` / `HWND(-2)`; set `restype = HWND` on anything that
+returns a handle (`WindowFromPoint`, `GetAncestor`) or the value is truncated the same
+way. The PowerShell capture never had this problem because `[IntPtr](-1)` is pointer-sized.
+Verify with `GetWindowLongW(h, -20) & 0x8` after the call, and check
+`GetAncestor(WindowFromPoint(centre), GA_ROOT) == h` before every grab -- `board_anim.py`
+does both, waits out transient covers (toasts), and refuses to film anything else.
+
+### ⛔ The ilinit's `abStart()` at launch does not service requests
+
+Three launches in one day, same result: `allegro.ilinit` loads the bridge and calls
+`abStart()`, the Command window reports `LISTENING on 127.0.0.1:9030 (child ipc:1)`, the
+helper process is up, and every client call returns `connection closed by helper` -- the
+helper's stdout pipe into Allegro is dead, so its write raises and it closes the socket.
+Once the Command window showed `[helper stderr]: cdsServIpc.exe: connection timeout`,
+which is the clue: `ipcBeginProcess` at ilinit time starts the child before Allegro's
+IPC service is ready to accept it. `skill abStop()` then `skill abStart()` typed *after
+the board is open* produced a working child every time. The client ping is not a check
+(the orphan answers it); only a real expression is. Kill the dead helper on port 9030
+before the restart or the new one shares the port with it (see above).
+
+### Capture cadence
+
+Each frame is one SKILL call, `axlVisibleUpdate(t)`, a 0.4-0.5 s settle, and a
+`CopyFromScreen` of the canvas child window (largest visible child of the main window)
+with Allegro held TOPMOST for the run. 209 frames took just under four minutes. The
+canvas is 1428×906 on a 1920×1080 display, so the portrait board is ~900 px tall: crop a
+4:5 or 1:1 window from the centre and scale to 1080 high for X and LinkedIn, which both
+want MP4 (H.264, yuv420p, `+faststart`), not GIF.
+
+## 18. Moving a placed part from outside: use `axlTransformObject`, not the `move` command
+
+**It works, and it is §7's call.** `axlTransformObject(sym ?move list(dx dy))` on a symbol
+dbid moves the part, its pins, its attached text and its place-bound; `axlDBCreateSymbol
+("R9" list(x y) nil 0.0)` places a component that the netlist import left unplaced (pins
+come up with their nets). Ten parts were moved and one placed this way on 2026-11-07,
+read back exact after a flush transaction, saved with `axlSaveDesign(?noConfirm t)`, and
+confirmed from the file with extracta. The DRC count fell from 32 to 11 as the overlaps
+cleared; the rest were the dangling pre-swap clines meeting the new pads.
+
+```skill
+axlDBTransactionCommit(axlDBTransactionStart())        ; flush first (§9)
+axlTransformObject(car(setof(x axlDBGetDesign()->symbols x->refdes=="C3")) ?move list(-60.0 0.0))
+axlDBCreateSymbol("R9" list(x y) nil 0.0)         ; unplaced component -> placed
+axlDBTransactionCommit(axlDBTransactionStart())        ; then read ->xy back
+```
+
+Attached text moves with the part. A refdes label that was already displaced stays
+displaced by the same amount; move it on its own with the same call on the text dbid from
+`axlDBGetAttachedText(sym)` (see §10, rotating text in place).
+
+**The lesson is about method, not the product.** A session spent two hours proving that
+the interactive `move` command cannot be fed picks from outside (replayed `pick x y`
+never delivers, pad picks say "No element found", `FORM find` does not select, the
+selection set is ignored, a canvas click selects whatever is under it, and `cancel`
+after a replay rolls back and leaves a ghost on the canvas) and then recorded "placement
+is a hand step". All of that is true of the *command*. None of it is a boundary, because
+the database call in §7 was never tried: the notes already said what to use. Before
+declaring a capability absent, grep these notes and the old scripts (`shift_block.py`,
+the decoupling placer) for the verb; §1 says the same about guessed names.
+
+Still true and still useful from that detour: `axlWindowBoxSet` frames the view,
+`showhide find` opens the Find panel, `axlSaveDesign(?noConfirm t)` saves, extracta on
+the saved file is the truth, and the in-session canvas can show a rolled-back move as a
+ghost until the next reload.
+
+## 19. Re-routing a corner after a part swap (2026-11-07): what the API does not say
+
+Ten parts moved, 26 clines and 5 vias created, DRC back to the pre-existing count, no dangling
+copper, all from the bridge. The traps, in the order they bit:
+
+- **`axlDBCreateLine` returns `(l_dbids g_flag)`, not a dbid.** A test for a leading `dbid:`
+  reports every success as a failure. The list has several dbids when the new line lands on an
+  existing cline of the same net: Allegro splits that cline at the junction, so dbids you held
+  for it are gone. Re-read by geometry, not by handle.
+- **Pins from metric footprints sit on fractional mils.** a SamacSys footprint put a pin at
+  (x.11, y.45) mils; a cline ending at the rounded (x, y) was 0.46 mil off and does NOT connect
+  (`dangle_check.py` reports NEAR-MISS). Always take endpoints from `pin->xy` printed with
+  `%.4f`, never from a placement table.
+- **"Maximum Neck Length"** fires on any segment narrower than the net's minimum line width that
+  runs longer than the max neck length (200 mil here); the expected/actual are on the DRC record
+  (`d->expected`, `d->actual`, `d->violations`). Short stubs at 8 mil pass, a 264 mil run at
+  20 mil fails. `axlCNSGetValue` is not bound in this product; the DRC record is the readable
+  source of the rule.
+- **Netless copper is invisible to net-based queries.** `netrev` left clines of the nets the
+  schematic change had deleted on the board with no net; `n->branches` never lists them, and they produced
+  "Line to Line Spacing ... net -" against the new route. Find them with the selection API:
+  `axlSetFindFilter(?enabled list("noall" "clines" "vias") ?onButtons list("clines" "vias"))`,
+  `axlAddSelectBox(board bBox)`, then `unless(o->net ...)` over `axlGetSelSet()`. Mounting-hole
+  vias are netless too, so filter by region before deleting.
+- **`axlSingleSelectPoint` returns the one topmost object**, not everything under the point, and
+  it honours layer visibility. To learn which plane region is under a via spot, filter to shapes
+  and probe with `ETCH/BOTTOM` hidden (`axlVisibleLayer("ETCH/BOTTOM" nil)`) so the inner GND
+  layer answers; here two probe points 100 mil apart sat in different plane regions.
+- **`axlDRCUpdate(t)` then `axlDRCGetCount()`**, with a flush transaction between writes and
+  reads; stale markers from deleted copper stay until the update.
+- **`axlDBCreateVia("TVIA10A" list(x y) "GND")`** creates a net-assigned via; a cline ending on
+  the via's xy connects to it. `axlDBCreateSymbol("R9" list(x y) nil 0.0)` places a component
+  the netlist import left unplaced, pins already on their nets.
+- **`axlTransformObject(sym ?angle 180.0 ?origin <body centre>)`** swaps a two-pad part's pins in
+  place, which is how to fix a pin order along a row without changing the footprint area.
