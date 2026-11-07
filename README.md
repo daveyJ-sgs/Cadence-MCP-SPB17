@@ -37,6 +37,7 @@ SKILL evaluation.
 | `bridge/allegro/board_profile.py` | Loads `board.json` (see below) |
 | `bridge/allegro/step_mapping.py` | **STEP models: list / set / apply / dump placement / mechanical symbols / open-close the 3D Canvas** |
 | `bridge/allegro/canvas_capture.ps1` | Drive and capture the Allegro 3D Canvas window: size, grab, numpad views, drags |
+| `bridge/allegro/board_anim.py` | **Film a board placing and routing itself** from the live canvas via per-net custom colours; frames to MP4 |
 | `render3d/render_board.py` | **Offline renders and turntables** from the canvas OBJ export + the STEP files |
 | `render3d/step_tess.py` | Colour-preserving STEP tessellation (OCP / XCAF) |
 | `render3d/make_video.py` | Frames → MP4, 1:1 crop, GIF, crossfaded cut (bundled ffmpeg) |
