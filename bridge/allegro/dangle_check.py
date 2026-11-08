@@ -27,6 +27,10 @@ Two failure modes, and this catches both:
   floating    endpoint far from anything. Usually a trace left behind by a
               part move: clines do not follow the parts they connect.
 
+Before that, sweep the board for clines that belong to NO net: deleting the
+via a cline ended on can leave the cline behind with its net stripped, and a
+netless cline is in no net's branch list, so the per-net walk cannot see it.
+
 For every chain endpoint, ask whether it lands on a pin, a via, another path
 on the same net and layer, or inside a shape on the same net and layer. An
 endpoint shared with the adjacent segment of its own path is interior, not
@@ -101,6 +105,26 @@ def main():
 
         findings = []
         stats = {"paths": 0, "ends": 0}
+
+        # Netless copper first. A cline whose via or pin was deleted can stay on
+        # the board with its net stripped; it then belongs to no net's branches,
+        # so the walk below never sees it. 2026-11-08: one such stub sat at an old
+        # cap position and was spotted by eye on screen, after this checker had
+        # said "no dangling endpoints". Only the selection API finds them.
+        br.send('axlSetFindFilter(?enabled list("noall" "clines") ?onButtons list("clines"))')
+        br.send('axlClearSelSet()')
+        br.send('axlAddSelectBox(list(list(-100000.0 -100000.0) list(100000.0 100000.0)))')
+        netless = sexp(br.send(
+            'mapcar(lambda((o) list(o->layer mapcar(lambda((s) s->startEnd) o->segments))) '
+            'setof(o axlGetSelSet() !o->net))'))
+        br.send('axlClearSelSet()')
+        br.send('axlSetFindFilter(?enabled list("all") ?onButtons list("all"))')
+        for entry in netless:
+            if isinstance(entry, list) and len(entry) == 2 and entry[1]:
+                first = pt(entry[1][0][0]) if isinstance(entry[1][0], list) else None
+                if first:
+                    findings.append(("(no net)", entry[0] if isinstance(entry[0], str) else "?",
+                                     first, 0.0, "nothing: netless cline", len(entry[1])))
 
         for net in names:
             br.send(f'ppN = car(setof(n axlDBGetDesign()->nets n->name=="{net}"))')
@@ -198,7 +222,7 @@ def main():
         print(f"*** {len(findings)} DANGLING ENDPOINT(S) ***\n")
         findings.sort(key=lambda f: (f[0], f[3]))
         for net, layer, e, d, what, n in findings:
-            tag = "NEAR-MISS" if d < NEAR else "floating"
+            tag = "NETLESS" if net == "(no net)" else ("NEAR-MISS" if d < NEAR else "floating")
             print(f"  {net:16} {layer:12} ({e[0]:8.2f},{e[1]:8.2f})  "
                   f"{n} seg  nearest {what} {d:7.2f} mil   {tag}")
 

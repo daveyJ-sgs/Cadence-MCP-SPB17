@@ -1379,3 +1379,9 @@ copper, all from the bridge. The traps, in the order they bit:
   the netlist import left unplaced, pins already on their nets.
 - **`axlTransformObject(sym ?angle 180.0 ?origin <body centre>)`** swaps a two-pad part's pins in
   place, which is how to fix a pin order along a row without changing the footprint area.
+- **A cline's `bBox` includes its width.** A 30 mil trace from (5460,1900) to (5460,1830) has a bBox of
+  (5445..5475, 1815..1915), so "paths whose bBox lies inside this box" misses it when the box is drawn
+  around the centreline. To delete a specific cline, match an endpoint instead:
+  `exists(s k->segments equal(car(s->startEnd) list(x y)) || equal(cadr(s->startEnd) list(x y)))`.
+- **Deleting a via can take its attached cline with it.** A cline that ended on a deleted via was gone
+  afterwards without an explicit delete; check with the dangle checker rather than assuming either way.
